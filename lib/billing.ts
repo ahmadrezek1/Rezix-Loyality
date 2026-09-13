@@ -8,9 +8,9 @@ export type BillingInterval='monthly'|'yearly';
 export type PlanDefinition={key:BillingPlanKey;name:string;monthlyLabel:string;yearlyLabel:string;friseurLimit:number;features:string[]};
 
 export const BILLING_PLANS:PlanDefinition[]=[
-  {key:'starter',name:'Starter',monthlyLabel:'19 €',yearlyLabel:'190 €',friseurLimit:3,features:['1 Salon','Bis zu 3 Friseure','Digitale Kundenkarte','Loyalty & Rewards']},
-  {key:'professional',name:'Professional',monthlyLabel:'39 €',yearlyLabel:'390 €',friseurLimit:10,features:['1 Salon','Bis zu 10 Friseure','Analytics','Custom Branding','Erweiterte Loyalty']},
-  {key:'business',name:'Business',monthlyLabel:'79 €',yearlyLabel:'790 €',friseurLimit:50,features:['Bis zu 50 Friseure','Erweiterte Administration','Priorisierter Support','Für wachsende Betriebe']}
+  {key:'starter',name:'Starter',monthlyLabel:'19 €',yearlyLabel:'',friseurLimit:1,features:['1 Salon','1 Friseur','Digitale Kundenkarte','Loyalty & Rewards']},
+  {key:'professional',name:'Professional',monthlyLabel:'39 €',yearlyLabel:'',friseurLimit:5,features:['1 Salon','Bis zu 5 Friseure','Analytics','Custom Branding','Erweiterte Loyalty']},
+  {key:'business',name:'Business',monthlyLabel:'79 €',yearlyLabel:'',friseurLimit:100,features:['Bis zu 100 Friseure','Erweiterte Administration','Priorisierter Support','Für wachsende Betriebe']}
 ];
 
 let client:ReturnType<typeof postgres>|null=null;
@@ -21,7 +21,7 @@ export function stripe(){const key=process.env.STRIPE_SECRET_KEY;if(!key)throw n
 export function priceId(plan:BillingPlanKey,interval:BillingInterval){const key=`STRIPE_PRICE_${plan.toUpperCase()}_${interval==='monthly'?'MONTHLY':'YEARLY'}`;const value=process.env[key];if(!value)throw new Error(`${key} fehlt`);return value}
 export function planFromPrice(price:string|null|undefined):BillingPlanKey|null{if(!price)return null;for(const p of BILLING_PLANS){if(price===process.env[`STRIPE_PRICE_${p.key.toUpperCase()}_MONTHLY`]||price===process.env[`STRIPE_PRICE_${p.key.toUpperCase()}_YEARLY`])return p.key}return null}
 export function planDefinition(plan:string|null|undefined){return BILLING_PLANS.find(p=>p.key===plan)||null}
-export function friseurLimitFor(plan:string,status?:string){if(status==='trialing'||plan==='trial')return 10;return planDefinition(plan)?.friseurLimit??0}
+export function friseurLimitFor(plan:string,status?:string){if(status==='trialing'||plan==='trial')return 1;return planDefinition(plan)?.friseurLimit??0}
 
 export function trialActive(b:Business){return b.subscriptionStatus==='trialing'&&!!b.trialEndsAt&&new Date(b.trialEndsAt).getTime()>Date.now()}
 export function billingOperational(b:Business){if(!b.active)return false;if(b.subscriptionStatus==='active'||b.subscriptionStatus==='trialing')return b.subscriptionStatus!=='trialing'||trialActive(b);if(b.subscriptionStatus==='past_due'&&b.billingGraceUntil)return new Date(b.billingGraceUntil).getTime()>Date.now();return false}

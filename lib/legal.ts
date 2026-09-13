@@ -1,4 +1,4 @@
-export const POLICY_VERSION = "v1.0";
+export const POLICY_VERSION='v1.0';
 export function legalConfig(){
  return {
   company:process.env.REZIX_LEGAL_COMPANY||'Rezix',
