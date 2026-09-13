@@ -33,3 +33,24 @@ git push origin main
 ```
 
 Danach in Vercel prüfen, ob der neue Commit als Production Deployment verwendet wird.
+
+## 2026-09-13 – Salon creation on custom Vercel domain
+
+### Symptom
+Submitting the Admin salon form on `https://loyalty.rezix.at` returned:
+
+```json
+{"error":"Invalid origin"}
+```
+
+### Root cause
+`sameOrigin()` compared the browser `Origin` header directly with `req.url`. Behind Vercel's reverse proxy, `req.url` can use a deployment/internal host while the public browser origin is the custom domain. This produced a false CSRF rejection.
+
+### Fix
+`sameOrigin()` now accepts the public origin resolved from `x-forwarded-host` / `x-forwarded-proto`, the canonical `NEXT_PUBLIC_APP_URL`, and Vercel's production hostname while keeping the same-origin protection enabled.
+
+Production must set:
+
+```env
+NEXT_PUBLIC_APP_URL=https://loyalty.rezix.at
+```
