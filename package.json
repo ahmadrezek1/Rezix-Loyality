@@ -1,6 +1,6 @@
 {
   "name": "rezix-loyalty",
-  "version": "0.8.0",
+  "version": "0.8.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -17,7 +17,8 @@
     "react": "19.1.1",
     "react-dom": "19.1.1",
     "dotenv": "^17.2.2",
-    "stripe": "^18.5.0"
+    "stripe": "^18.5.0",
+    "@zxing/browser": "^0.1.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
