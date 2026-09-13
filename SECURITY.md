@@ -1,29 +1,16 @@
-# Rezix Loyalty v0.4 Security
+# Security implementation v1.0
 
-## Included
-- RBAC roles: admin, manager, manager, friseur
-- Tenant isolation using `business_id`
-- Signed server-side sessions with 8-hour expiry and random session ID
-- `HttpOnly`, `Secure` (production), `SameSite=Strict` session cookie
-- Login throttling: 5 failed attempts => 15 minute temporary block
-- Audit log for authentication and sensitive actions
-- IP addresses are HMAC-hashed before storage
-- Same-origin checks on authenticated mutation routes
-- Security headers: CSP, frame denial, MIME sniffing protection, referrer and permissions policies
-- Minimum 12-character passwords for new manager/friseur accounts
-- Atomic stamp writes scoped to the authenticated salon
+- Staff/admin sessions: HMAC-signed token, server-side revocation, 8-hour expiry, HttpOnly/Secure-in-production/SameSite=Strict cookie. Active staff membership is rechecked for every authenticated request.
+- Customers: random 256-bit session tokens stored only in HttpOnly cookies; only SHA-256 hashes are stored in `customer_sessions`; 180-day expiry, salon binding and active-customer/salon checks. No bearer-token URL or localStorage authentication.
+- OTP verification, account creation, consent recording and session creation share one transaction. OTP is single-use, 10 minutes, five attempts. Separate IP and email send quotas.
+- Atomic per-salon stamp/redeem operations with idempotency and audit. Disabled memberships and expired entitlements are checked inside the transaction.
+- Team activation/creation is serialized under a salon row lock to enforce plan limits.
+- Mutating APIs validate Origin (or same-origin Fetch Metadata when Origin is absent). Login and reset include IP quotas; successful-account password reset requests are also limited.
+- Password reset token consumption, password update and session revocation are atomic. Email content interpolating salon names is HTML-escaped.
+- Image uploads: allowlisted MIME, matching PNG/JPEG/WebP signature, fixed extension, maximum 2 MiB, server-derived salon path, random asset version. Uploads use server-only storage credentials.
+- Offline fallback never caches personal/API/dashboard responses. Production CSP excludes unsafe-eval.
+- Existing MFA tables are retained as historical data, not used by authentication. The public customer token column is retained for schema compatibility but is not accepted for authentication.
 
-## Before production
-1. Run `npm run db:migrate` once against the production database.
-2. Use a random `REZIX_SESSION_SECRET` of at least 32 characters.
-3. Keep `DATABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` only in Vercel secrets.
-4. Never commit `.env.local`.
-5. Test admin, manager, manager and friseur access with separate accounts.
+## Validation limits
 
-## Next security work (planned)
-- Password reset and e-mail verification
-- 2FA for admin/manager
-- Server-side session revocation/device list
-- Dedicated CSRF tokens for high-risk actions
-- Automated dependency and SAST checks in CI
-- Security alerts and monitoring
+Mocks do not establish real database locking or physical-device camera compatibility. Complete the release checklist in RELEASE-V1.md. Historical image versions are retained; periodic asset/session/log retention can be designed separately with an explicit retention policy.

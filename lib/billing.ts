@@ -4,13 +4,13 @@ import Stripe from 'stripe';
 import type { Business } from './store';
 
 export type BillingPlanKey='starter'|'professional'|'business';
-export type BillingInterval='monthly'|'yearly';
-export type PlanDefinition={key:BillingPlanKey;name:string;monthlyLabel:string;yearlyLabel:string;friseurLimit:number;features:string[]};
+export type BillingInterval='monthly';
+export type PlanDefinition={key:BillingPlanKey;name:string;monthlyLabel:string;friseurLimit:number;features:string[]};
 
 export const BILLING_PLANS:PlanDefinition[]=[
-  {key:'starter',name:'Starter',monthlyLabel:'19 €',yearlyLabel:'',friseurLimit:1,features:['1 Salon','1 Friseur','Digitale Kundenkarte','Loyalty & Rewards']},
-  {key:'professional',name:'Professional',monthlyLabel:'39 €',yearlyLabel:'',friseurLimit:5,features:['1 Salon','Bis zu 5 Friseure','Analytics','Custom Branding','Erweiterte Loyalty']},
-  {key:'business',name:'Business',monthlyLabel:'79 €',yearlyLabel:'',friseurLimit:100,features:['Bis zu 100 Friseure','Erweiterte Administration','Priorisierter Support','Für wachsende Betriebe']}
+  {key:'starter',name:'Starter',monthlyLabel:'19 €',friseurLimit:1,features:['1 Salon','1 Friseur','Digitale Kundenkarte','Loyalty & Rewards']},
+  {key:'professional',name:'Professional',monthlyLabel:'39 €',friseurLimit:5,features:['1 Salon','Bis zu 5 Friseure','Analytics','Custom Branding','Erweiterte Loyalty']},
+  {key:'business',name:'Business',monthlyLabel:'79 €',friseurLimit:100,features:['Bis zu 100 Friseure','Erweiterte Administration','Priorisierter Support','Für wachsende Betriebe']}
 ];
 
 let client:ReturnType<typeof postgres>|null=null;
@@ -48,18 +48,28 @@ export async function syncSubscription(subscription:Stripe.Subscription,forcedBu
   const customerId=typeof subscription.customer==='string'?subscription.customer:subscription.customer.id;
   const businessId=forcedBusinessId||subscription.metadata?.rezix_business_id||await findBusinessByStripeCustomer(customerId)||await findBusinessBySubscription(subscription.id);
   if(!businessId)throw new Error(`Kein Rezix Salon für Stripe Subscription ${subscription.id}`);
-  const item=subscription.items.data[0];const price=item?.price?.id||null;const plan=planFromPrice(price)||'starter';
+  const item=subscription.items.data[0];const price=item?.price?.id||null;const plan=planFromPrice(price);if(!plan)throw new Error(`Unbekannter Stripe Preis: ${price}`);
   const status=subscription.status==='canceled'?'canceled':subscription.status;
   const currentEnd=toDateFromUnix((subscription as any).current_period_end ?? item?.current_period_end);
   const grace=status==='past_due'?new Date(Date.now()+7*24*3600_000):null;
-  await db()`update businesses set stripe_customer_id=${customerId},stripe_subscription_id=${subscription.id},stripe_price_id=${price},billing_plan=${plan},subscription_status=${status},subscription_current_period_end=${currentEnd},cancel_at_period_end=${subscription.cancel_at_period_end},billing_grace_until=${grace},billing_updated_at=now() where id=${businessId}`;
+  await db()`update businesses set stripe_customer_id=${customerId},stripe_subscription_id=${subscription.id},stripe_price_id=${price},billing_plan=${plan},subscription_status=${status},subscription_current_period_end=${currentEnd},cancel_at_period_end=${subscription.cancel_at_period_end},billing_grace_until=case when ${status}='past_due' then coalesce(billing_grace_until,${grace}) else null end,billing_updated_at=now() where id=${businessId}`;
   return businessId;
 }
 
-export async function markInvoicePaid(invoice:Stripe.Invoice){const rawSub=(invoice as any).subscription??(invoice as any).parent?.subscription_details?.subscription;const sub=typeof rawSub==='string'?rawSub:(rawSub&&typeof rawSub.id==='string'?rawSub.id:null);const customer=typeof invoice.customer==='string'?invoice.customer:null;const businessId=(sub?await findBusinessBySubscription(sub):undefined)||(customer?await findBusinessByStripeCustomer(customer):undefined);if(!businessId)return null;await db()`update businesses set billing_grace_until=null,billing_updated_at=now() where id=${businessId}`;await addBillingHistory({businessId,eventType:'invoice.paid',amountTotal:invoice.amount_paid,currency:invoice.currency,metadata:{invoiceId:invoice.id}});return businessId}
-export async function markInvoicePaymentFailed(invoice:Stripe.Invoice){const rawSub=(invoice as any).subscription??(invoice as any).parent?.subscription_details?.subscription;const sub=typeof rawSub==='string'?rawSub:(rawSub&&typeof rawSub.id==='string'?rawSub.id:null);const customer=typeof invoice.customer==='string'?invoice.customer:null;const businessId=(sub?await findBusinessBySubscription(sub):undefined)||(customer?await findBusinessByStripeCustomer(customer):undefined);if(!businessId)return null;await db()`update businesses set subscription_status='past_due',billing_grace_until=now()+interval '7 days',billing_updated_at=now() where id=${businessId}`;await addBillingHistory({businessId,eventType:'invoice.payment_failed',amountTotal:invoice.amount_due,currency:invoice.currency,metadata:{invoiceId:invoice.id}});return businessId}
+async function syncInvoice(invoice:Stripe.Invoice,eventType:'invoice.paid'|'invoice.payment_failed',eventId?:string){
+ const legacy=invoice as Stripe.Invoice & {subscription?:string|Stripe.Subscription|null};
+ const rawSub=legacy.subscription??invoice.parent?.subscription_details?.subscription;
+ const subscriptionId=typeof rawSub==='string'?rawSub:rawSub?.id;
+ if(!subscriptionId)return null;
+ const subscription=await stripe().subscriptions.retrieve(subscriptionId);
+ const businessId=await syncSubscription(subscription);
+ await addBillingHistory({businessId,eventType,stripeEventId:eventId,status:subscription.status,amountTotal:eventType==='invoice.paid'?invoice.amount_paid:invoice.amount_due,currency:invoice.currency,metadata:{invoiceId:invoice.id}});
+ return businessId;
+}
+export async function markInvoicePaid(invoice:Stripe.Invoice,eventId?:string){return syncInvoice(invoice,'invoice.paid',eventId)}
+export async function markInvoicePaymentFailed(invoice:Stripe.Invoice,eventId?:string){return syncInvoice(invoice,'invoice.payment_failed',eventId)}
 
-export async function beginWebhook(event:Stripe.Event){const inserted=await db()`insert into stripe_webhook_events(event_id,event_type,livemode,processing_started_at,attempts) values (${event.id},${event.type},${event.livemode},now(),1) on conflict(event_id) do nothing returning event_id`;if(inserted.length)return true;const retry=await db()`update stripe_webhook_events set processing_started_at=now(),attempts=attempts+1 where event_id=${event.id} and processed=false and (processing_started_at is null or processing_started_at<now()-interval '5 minutes') returning event_id`;return retry.length>0}
-export async function finishWebhook(eventId:string,error?:unknown){if(error){await db()`update stripe_webhook_events set last_error=${String(error).slice(0,1000)} where event_id=${eventId}`;return}await db()`update stripe_webhook_events set processed=true,processed_at=now(),last_error=null where event_id=${eventId}`}
+export async function beginWebhook(event:Stripe.Event){const inserted=await db()`insert into stripe_webhook_events(event_id,event_type,livemode,processing_started_at,attempts) values (${event.id},${event.type},${event.livemode},now(),1) on conflict(event_id) do nothing returning event_id`;if(inserted.length)return 'claimed' as const;const retry=await db()`update stripe_webhook_events set processing_started_at=now(),attempts=attempts+1 where event_id=${event.id} and processed=false and (processing_started_at is null or processing_started_at<now()-interval '5 minutes') returning event_id`;if(retry.length)return 'claimed' as const;const rows=await db()`select processed from stripe_webhook_events where event_id=${event.id}`;return rows[0]?.processed?'duplicate' as const:'busy' as const}
+export async function finishWebhook(eventId:string,error?:unknown){if(error){await db()`update stripe_webhook_events set processing_started_at=null,last_error=${String(error).slice(0,1000)} where event_id=${eventId}`;return}await db()`update stripe_webhook_events set processed=true,processed_at=now(),last_error=null where event_id=${eventId}`}
 export async function addBillingHistory(input:{businessId:string;eventType:string;stripeEventId?:string|null;status?:string|null;plan?:string|null;amountTotal?:number|null;currency?:string|null;metadata?:Record<string,unknown>}){await db()`insert into billing_history(id,business_id,event_type,stripe_event_id,subscription_status,billing_plan,amount_total,currency,metadata) values (${`bill_${crypto.randomBytes(10).toString('hex')}`},${input.businessId},${input.eventType},${input.stripeEventId||null},${input.status||null},${input.plan||null},${input.amountTotal??null},${input.currency||null},${db().json((input.metadata||{}) as any)})`}
 export async function listBillingHistory(businessId:string,limit=20){return db()`select event_type,subscription_status,billing_plan,amount_total,currency,metadata,created_at from billing_history where business_id=${businessId} order by created_at desc limit ${limit}`}

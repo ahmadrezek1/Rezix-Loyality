@@ -1,0 +1,2 @@
+ 'use client';
+export default function ErrorPage({reset}:{reset:()=>void}){return <main className="join"><section className="join-card"><h1>Das hat gerade nicht geklappt.</h1><p>Bitte versuche es erneut. Falls das Problem bestehen bleibt, wende dich an den Support.</p><button className="gold" onClick={reset}>Erneut versuchen</button><a className="text-link" href="/">Zur Startseite</a></section></main>}

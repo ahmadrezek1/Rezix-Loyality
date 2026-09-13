@@ -1,25 +1,3 @@
-import { requireManager } from '@/lib/auth';
-import { getDashboardData } from '@/lib/store';
-import { Scissors,Gift,Users,History,UserPlus,ExternalLink,CreditCard } from 'lucide-react';
-import DashboardShell from '@/components/DashboardShell';
-import LoyaltyDesigner from '@/components/LoyaltyDesigner';
+import Workspace from '@/components/ManagerWorkspace';
 export const dynamic='force-dynamic';
-
-export default async function ManagerPage({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){
- const s=await requireManager();const db=await getDashboardData(s.businessId!);const q=await searchParams;
- if(!db.business)return <main><section className="join"><div className="join-card"><h1>Salon nicht verfügbar</h1></div></section></main>;
- return <DashboardShell role="manager" name={s.name} businessName={db.business.name} logoUrl={db.business.logoUrl}>
- <section id="overview" className="dashboard-hero"><div><span className="eyebrow">SALON ÜBERSICHT</span><h1>{db.business.name}</h1><p>Kunden, Friseure, Treuekarte und Belohnungen zentral verwalten.</p></div><div className="page-actions"><a className="secondary link-button" href={`/s/${db.business.slug}`} target="_blank"><ExternalLink size={15}/> Kundenkarte öffnen</a></div></section>
- <div className="metrics dashboard-metrics"><Metric label="Besuche heute" value={String(db.visitsToday)} icon={<Scissors/>}/><Metric label="Kunden" value={String(db.totalCustomers)} icon={<Users/>}/><Metric label="Friseure" value={String(db.staffCount)} icon={<UserPlus/>}/><Metric label="Stempelziel" value={String(db.business.rewardTarget)} icon={<Gift/>}/></div>
- {q.billingBlocked&&<div className="alert">Diese Aktion ist mit deinem aktuellen Tarif derzeit nicht verfügbar. Prüfe deinen Tarif unter <a href="/manager/billing">Tarif & Abrechnung</a>.</div>}
- {q.configSaved&&<div className="success">Treuekarte und Belohnung wurden aktualisiert. Die Änderungen sind sofort für alle Kunden sichtbar.</div>}{q.configError&&<div className="alert">Die Karten-Einstellungen konnten nicht gespeichert werden. Prüfe die Eingaben.</div>}{q.configUpload&&<div className="alert">Logo oder Stempel konnte nicht hochgeladen werden. Verwende PNG, JPG oder WEBP bis 2 MB.</div>}
- <div className="dashboard-section-grid">
-  <section id="friseure" className="panel"><div className="section-kicker">TEAM</div><h2>Friseur-Zugang erstellen</h2><p className="muted">Nur Friseure dieses Salons erhalten Zugriff auf dessen Kundenkarten.</p>{q.friseurAdded&&<div className="success">Friseur-Zugang wurde erstellt. Die E-Mail-Adresse muss vor der ersten Anmeldung bestätigt werden.</div>}{q.mailError&&<div className="alert">Der Zugang wurde erstellt, aber die Verifizierungs-E-Mail konnte nicht versendet werden.</div>}{q.friseurError&&<div className="alert">Bitte gültige Daten und mindestens 12 Zeichen als Passwort eingeben.</div>}{q.friseurExists&&<div className="alert">Diese E-Mail-Adresse existiert bereits.</div>}<form className="stack-form" method="post" action="/api/friseur/create"><label>Name</label><input name="name" required/><label>E-Mail</label><input name="email" type="email" required/><label>Temporäres Passwort</label><input name="password" type="password" minLength={12} required/><input type="hidden" name="role" value="friseur"/><button className="gold" type="submit">Zugang erstellen</button></form></section>
-  <section id="customers" className="panel"><div className="section-kicker">KUNDEN</div><h2>Kundenübersicht</h2>{db.customers.length===0?<div className="empty-block"><Users size={36}/><b>Noch keine Kunden</b><span>Kunden erscheinen hier erst nach einer echten Registrierung.</span></div>:<div className="attention customer-list-scroll">{db.customers.map(c=><div className="row" key={c.id}><div className="avatar sm">{c.name.slice(0,1).toUpperCase()}</div><div><b>{c.name}</b><span>{c.email||c.code} · {c.stamps}/{db.business!.rewardTarget} Stempel</span></div></div>)}</div>}</section>
- </div>
- <section id="loyalty" className="dashboard-section"><div className="section-heading"><div><span className="section-kicker">LOYALTY</span><h2>Karten & Belohnungen</h2></div><span className="section-note">Änderungen gelten sofort für alle Kunden</span></div><LoyaltyDesigner business={db.business}/></section>
- <section id="settings" className="panel quick dashboard-section"><div className="section-kicker">SALON</div><h2>Branding & Konfiguration</h2><div className="brand-config">{db.business.logoUrl&&<div><span>Salon-Logo</span><img src={db.business.logoUrl} alt="Logo"/></div>}{db.business.stampUrl&&<div><span>Aktueller Stempel</span><img src={db.business.stampUrl} alt="Stempel"/></div>}</div><div className="quick-grid"><Info icon={<Gift/>} title="Belohnung" text={db.business.rewardText}/><Info icon={<Scissors/>} title="Ziel" text={`${db.business.rewardTarget} Stempel`}/><Info icon={<History/>} title="Gespeicherte Besuche" text={String(db.visitCount)}/></div></section>
- </DashboardShell>;
-}
-function Metric({label,value,icon}:{label:string,value:string,icon:React.ReactNode}){return <div className="metric"><div className="iconbox">{icon}</div><span>{label}</span><b>{value}</b><small>Live</small></div>}
-function Info({icon,title,text}:{icon:React.ReactNode,title:string,text:string}){return <div className="info"><div className="iconbox">{icon}</div><div><b>{title}</b><span>{text}</span></div></div>}
+export default function Page({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){return <Workspace view="overview" searchParams={searchParams}/>;}

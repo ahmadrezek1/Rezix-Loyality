@@ -31,16 +31,7 @@ create table if not exists auth_tokens (
 );
 create index if not exists auth_tokens_lookup_idx on auth_tokens(token_hash, purpose, expires_at);
 
-create table if not exists auth_mfa (
-  actor_type text not null check (actor_type in ('admin','manager')),
-  actor_id text not null,
-  secret_enc text not null,
-  enabled boolean not null default false,
-  recovery_codes_hash jsonb not null default '[]'::jsonb,
-  enrolled_at timestamptz,
-  updated_at timestamptz not null default now(),
-  primary key(actor_type, actor_id)
-);
+
 
 create table if not exists customer_otp_challenges (
   id text primary key,
@@ -57,5 +48,4 @@ create table if not exists customer_otp_challenges (
 );
 create index if not exists customer_otp_phone_idx on customer_otp_challenges(business_id, phone, created_at desc);
 
--- Existing managers/friseure are treated as verified so the migration does not lock out current production users.
-update staff_users set email_verified_at=coalesce(email_verified_at, created_at, now()) where email_verified_at is null;
+-- Email verification must only be performed through a verified email token.

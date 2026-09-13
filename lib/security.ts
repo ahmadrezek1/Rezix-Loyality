@@ -8,7 +8,7 @@ const rid=(p:string)=>`${p}_${crypto.randomBytes(10).toString('hex')}`;
 export function requestIp(req:Request){const h=req.headers;return (h.get('x-forwarded-for')?.split(',')[0]||h.get('x-real-ip')||'unknown').trim()}
 export function sameOrigin(req:Request){
  const origin=req.headers.get('origin');
- if(!origin)return true;
+ if(!origin)return req.headers.get('sec-fetch-site')==='same-origin';
  try{
   const incoming=new URL(origin).origin;
   const allowed=new Set<string>();
@@ -37,3 +37,11 @@ export async function recentAdminAudit(limit=40){return db()`select business_id,
 export async function isBlocked(scope:string,identity:string,req:Request){const key=hashPrivate(`${scope}|${identity.toLowerCase()}|${requestIp(req)}`);const rows=await db()`select blocked_until from auth_rate_limits where key_hash=${key} limit 1`;return !!(rows[0]?.blocked_until && new Date(rows[0].blocked_until).getTime()>Date.now())}
 export async function recordAuthFailure(scope:string,identity:string,req:Request){const key=hashPrivate(`${scope}|${identity.toLowerCase()}|${requestIp(req)}`);await db()`insert into auth_rate_limits(key_hash,scope,failures,blocked_until) values (${key},${scope},1,null) on conflict(key_hash) do update set failures=auth_rate_limits.failures+1, blocked_until=case when auth_rate_limits.failures+1>=5 then now()+interval '15 minutes' else auth_rate_limits.blocked_until end, updated_at=now()`}
 export async function clearAuthFailures(scope:string,identity:string,req:Request){const key=hashPrivate(`${scope}|${identity.toLowerCase()}|${requestIp(req)}`);await db()`delete from auth_rate_limits where key_hash=${key}`}
+
+export function escapeHtml(value:string){return value.replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]!))}
+/** Atomic fixed-window limit; identities are hashed before persistence. */
+export async function consumeRateLimit(scope:string,identity:string,limit:number,minutes:number){
+ const key=hashPrivate(`${scope}|${identity.toLowerCase()}`);
+ const rows=await db()`insert into auth_rate_limits(key_hash,scope,failures,blocked_until) values(${key},${scope},1,now()+(${minutes}*interval '1 minute')) on conflict(key_hash) do update set failures=case when auth_rate_limits.blocked_until<=now() then 1 else auth_rate_limits.failures+1 end,blocked_until=case when auth_rate_limits.blocked_until<=now() then now()+(${minutes}*interval '1 minute') else auth_rate_limits.blocked_until end,updated_at=now() returning failures`;
+ return rows[0].failures<=limit;
+}

@@ -1,3 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getBusinessById,getCustomerByToken } from '@/lib/store';
-export async function GET(req:Request){const token=new URL(req.url).searchParams.get('token')||'';const c=await getCustomerByToken(token);if(!c)return NextResponse.json({error:'Nicht gefunden'},{status:404});const business=await getBusinessById(c.businessId);if(!business||!business.active)return NextResponse.json({error:'Nicht gefunden'},{status:404});return NextResponse.json({customer:{name:c.name,code:c.code,stamps:c.stamps,rewardsRedeemed:c.rewardsRedeemed,lastVisitAt:c.lastVisitAt,marketingConsent:c.marketingConsent},business})}
+import { getBusinessBySlug } from '@/lib/store';
+import { customerSession } from '@/lib/customer-session';
+import { billingOperational } from '@/lib/billing';
+export async function GET(req:Request){
+ const business=await getBusinessBySlug(new URL(req.url).searchParams.get('slug')||'');
+ const c=business?await customerSession(business.id):null;
+ if(!business||!c)return NextResponse.json({error:'Bitte bestätige deine E-Mail-Adresse.'},{status:401,headers:{'Cache-Control':'no-store'}});
+ const {id,slug,name,rewardTarget,rewardText,logoUrl,stampUrl,cardTitle,cardSubtitle,primaryColor,stampShape}=business;
+ return NextResponse.json({customer:{name:c.name,code:c.code,stamps:c.stamps,rewardsRedeemed:c.rewards_redeemed,lastVisitAt:c.last_visit_at},business:{id,slug,name,rewardTarget,rewardText,logoUrl,stampUrl,cardTitle,cardSubtitle,primaryColor,stampShape},operational:billingOperational(business)},{headers:{'Cache-Control':'no-store'}});
+}

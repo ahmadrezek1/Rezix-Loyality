@@ -147,16 +147,7 @@ create table if not exists auth_tokens (
 );
 create index if not exists auth_tokens_lookup_idx on auth_tokens(token_hash, purpose, expires_at);
 
-create table if not exists auth_mfa (
-  actor_type text not null check (actor_type in ('admin','manager')),
-  actor_id text not null,
-  secret_enc text not null,
-  enabled boolean not null default false,
-  recovery_codes_hash jsonb not null default '[]'::jsonb,
-  enrolled_at timestamptz,
-  updated_at timestamptz not null default now(),
-  primary key(actor_type, actor_id)
-);
+
 
 create table if not exists customer_otp_challenges (
   id text primary key,

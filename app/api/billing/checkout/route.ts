@@ -12,7 +12,7 @@ export async function POST(req:Request){
   const f=await req.formData();
   const plan=String(f.get('plan')||'') as BillingPlanKey;
   const interval=String(f.get('interval')||'monthly') as BillingInterval;
-  if(!['starter','professional','business'].includes(plan)||!['monthly','yearly'].includes(interval))return NextResponse.redirect(new URL('/manager/billing?error=plan',req.url),303);
+  if(!['starter','professional','business'].includes(plan)||interval!=='monthly')return NextResponse.redirect(new URL('/manager/billing?error=plan',req.url),303);
   const [business,manager]=await Promise.all([getBusinessById(s.businessId),getStaffById(s.sub)]);
   if(!business||!manager)return NextResponse.redirect(new URL('/manager/billing?error=account',req.url),303);
   if(business.stripeSubscriptionId&&['active','trialing','past_due','unpaid','paused'].includes(business.subscriptionStatus))return NextResponse.redirect(new URL('/manager/billing?manage=1',req.url),303);

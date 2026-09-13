@@ -1,0 +1,2 @@
+import Link from 'next/link';
+export default function NotFound(){return <main className="join"><section className="join-card"><h1>Seite nicht gefunden</h1><p>Bitte prüfe den Link oder öffne die Startseite.</p><Link className="gold link-button" href="/">Zur Startseite</Link></section></main>}

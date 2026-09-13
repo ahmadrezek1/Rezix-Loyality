@@ -1,0 +1,11 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const load=require('./load-typescript.cjs');
+const security=load('lib/security.ts');
+test('reject foreign and missing origins on mutations',()=>{assert.equal(security.sameOrigin(new Request('https://app.test/api',{headers:{origin:'https://evil.test'}})),false);assert.equal(security.sameOrigin(new Request('https://app.test/api')),false);assert.equal(security.sameOrigin(new Request('https://app.test/api',{headers:{origin:'https://app.test'}})),true)});
+test('email HTML escapes user supplied markup',()=>assert.equal(security.escapeHtml('<img src="x">&'), '&lt;img src=&quot;x&quot;&gt;&amp;'));
+const auth=load('lib/auth.ts',{'next/headers':{cookies:async()=>({get:()=>undefined})},'next/navigation':{},'./auth-store':{}});
+test('session tokens reject tampering and expiry',()=>{const a=auth.createSessionToken({role:'manager',sub:'unit',businessId:'salon'});assert.equal(auth.verifySessionToken(a.token).businessId,'salon');assert.equal(auth.verifySessionToken(a.token+'x'),null);assert.equal(auth.verifySessionToken(auth.createSessionToken({role:'manager',sub:'unit'},-1).token),null)});
+const session=load('lib/customer-session.ts',{'next/headers':{cookies:async()=>({get:()=>undefined})},'./db':{}});
+test('customer cookies isolate salons and are HttpOnly',()=>{assert.notEqual(session.customerCookieName('salon-a'),session.customerCookieName('salon-b'));assert.equal(session.customerCookieOptions.httpOnly,true);assert.equal(session.customerCookieOptions.sameSite,'lax')});
+const billing=load('lib/billing.ts');
+test('trial expiry and grace expiry block changing operations',()=>{assert.equal(billing.billingOperational({active:true,subscriptionStatus:'trialing',trialEndsAt:'2000-01-01'}),false);assert.equal(billing.billingOperational({active:true,subscriptionStatus:'past_due',billingGraceUntil:'2000-01-01'}),false);assert.equal(billing.billingOperational({active:false,subscriptionStatus:'active'}),false);assert.equal(billing.billingOperational({active:true,subscriptionStatus:'active'}),true)});
+test('plan limits match the product requirements',()=>{assert.equal(billing.friseurLimitFor('trial','trialing'),1);assert.equal(billing.friseurLimitFor('starter'),1);assert.equal(billing.friseurLimitFor('professional'),5);assert.equal(billing.friseurLimitFor('business'),100)});

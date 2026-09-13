@@ -1,29 +1,33 @@
+'use client';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Home, Users, Scissors, CreditCard, Settings, Gift, LogOut, ScanLine, UserRoundSearch, Store, ShieldCheck } from 'lucide-react';
 
 export type DashboardRole='admin'|'manager'|'friseur';
 
 const adminItems=[
- {href:'/admin#overview',label:'Übersicht',icon:Home},
- {href:'/admin#salons',label:'Salons',icon:Store},
- {href:'/admin#new-salon',label:'Salon anlegen',icon:Gift},
- {href:'/admin#system',label:'System',icon:ShieldCheck},
+ {href:'/admin',label:'Übersicht',icon:Home},
+ {href:'/admin/salons',label:'Salons',icon:Store},
+ {href:'/admin/subscriptions',label:'Abonnements',icon:CreditCard},
+ {href:'/admin/system',label:'Einstellungen',icon:ShieldCheck},
 ];
 const managerItems=[
- {href:'/manager#overview',label:'Übersicht',icon:Home},
- {href:'/manager#customers',label:'Kunden',icon:Users},
- {href:'/manager#friseure',label:'Friseure',icon:Scissors},
- {href:'/manager#loyalty',label:'Karten & Belohnungen',icon:Gift},
+ {href:'/manager',label:'Übersicht',icon:Home},
+ {href:'/manager/customers',label:'Kunden',icon:Users},
+ {href:'/manager/friseure',label:'Friseure',icon:Scissors},
+ {href:'/manager/loyalty',label:'Karten & Belohnungen',icon:Gift},
  {href:'/manager/billing',label:'Tarif & Abrechnung',icon:CreditCard},
- {href:'/manager#settings',label:'Einstellungen',icon:Settings},
+ {href:'/manager/settings',label:'Einstellungen',icon:Settings},
 ];
 const friseurItems=[
- {href:'/friseur#overview',label:'Übersicht',icon:Home},
- {href:'/friseur#scan',label:'Kunden scannen',icon:ScanLine},
- {href:'/friseur#customer',label:'Kundenkarte',icon:UserRoundSearch},
+ {href:'/friseur',label:'Übersicht',icon:Home},
+ {href:'/friseur/scan',label:'Kunden scannen',icon:ScanLine},
+ {href:'/friseur/customer',label:'Kundenkarte',icon:UserRoundSearch},
 ];
 
 export default function DashboardShell({role,name,businessName,logoUrl,children}:{role:DashboardRole,name?:string|null,businessName?:string|null,logoUrl?:string|null,children:React.ReactNode}){
+ const pathname=usePathname();
+ const activeHref=(href:string)=>pathname===href||(href.endsWith('/salons')&&pathname.startsWith(href+'/'));
  const items=role==='admin'?adminItems:role==='manager'?managerItems:friseurItems;
  return <div className="dashboard-app">
   <aside className="dashboard-sidebar">
@@ -31,8 +35,8 @@ export default function DashboardShell({role,name,businessName,logoUrl,children}
     <img src="/rezix-logo.svg" alt="Rezix"/>
     <div><b>REZIX</b><span>{role==='admin'?'ADMIN':role==='manager'?'MANAGER':'FRISEUR'}</span></div>
    </div>
-   <nav className="sidebar-nav">
-    {items.map(({href,label,icon:Icon},i)=><Link key={href} href={href} className={`sidebar-link ${i===0?'active':''}`}><Icon size={19}/><span>{label}</span></Link>)}
+   <nav className="sidebar-nav" aria-label="Hauptnavigation">
+    {items.map(({href,label,icon:Icon})=><Link key={href} href={href} aria-current={activeHref(href)?'page':undefined} title={label} className={`sidebar-link ${activeHref(href)?'active':''}`}><Icon size={19}/><span>{label}</span></Link>)}
    </nav>
    <div className="sidebar-bottom">
     <div className="sidebar-profile">
@@ -45,7 +49,7 @@ export default function DashboardShell({role,name,businessName,logoUrl,children}
   <div className="dashboard-main">
    <header className="dashboard-header">
     <div className="mobile-brand"><img src="/rezix-logo.svg" alt="Rezix"/><b>{businessName||'Rezix Loyalty'}</b></div>
-    <div className="header-spacer"/>
+    <div className="header-breadcrumb">Workspace <span>/</span> <b>{items.find(item=>activeHref(item.href))?.label}</b></div><div className="header-spacer"/><form className="mobile-logout" method="post" action="/api/logout"><button className="secondary" aria-label="Abmelden"><LogOut size={18}/></button></form>
     <div className="header-role"><div className="sidebar-avatar small">{(name||role).slice(0,1).toUpperCase()}</div><div><b>{name||role}</b><span>{role==='admin'?'Admin':role==='manager'?'Manager':'Friseur'}</span></div></div>
    </header>
    <main className="dashboard-content">{children}</main>
