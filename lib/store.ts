@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
 import postgres from 'postgres';
 
-export type Business = { name:string; rewardTarget:number; rewardText:string; createdAt:string };
-export type StaffUser = { id:string; name:string; email:string; passwordSalt:string; passwordHash:string; role:'staff'|'manager'; active:boolean; createdAt:string };
-export type Customer = { id:string; code:string; token:string; name:string; phone:string; stamps:number; rewardsRedeemed:number; createdAt:string; lastVisitAt:string|null };
-export type Visit = { id:string; customerId:string; staffId:string; createdAt:string; type:'stamp'|'redeem' };
+export type Business = { id:string; slug:string; name:string; rewardTarget:number; rewardText:string; logoUrl:string|null; stampUrl:string|null; active:boolean; createdAt:string; billingPlan:'trial'|'starter'|'professional'|'business'; subscriptionStatus:string; trialStartedAt:string|null; trialEndsAt:string|null; stripeCustomerId:string|null; stripeSubscriptionId:string|null; stripePriceId:string|null; subscriptionCurrentPeriodEnd:string|null; cancelAtPeriodEnd:boolean; billingGraceUntil:string|null; billingUpdatedAt:string|null };
+export type StaffUser = { id:string; businessId:string; name:string; email:string; passwordSalt:string; passwordHash:string; role:'manager'|'friseur'; active:boolean; createdAt:string; emailVerifiedAt:string|null };
+export type Customer = { id:string; businessId:string; code:string; token:string; name:string; phone:string; stamps:number; rewardsRedeemed:number; createdAt:string; lastVisitAt:string|null; active:boolean; privacyNoticeAckAt:string|null; marketingConsent:boolean; marketingConsentAt:string|null; anonymizedAt:string|null };
+export type PrivacyRequest={id:string;businessId:string;customerId:string;customerName:string;customerPhone:string;requestType:'access'|'erasure';status:'pending'|'completed'|'rejected';requestedAt:string;resolvedAt:string|null;resolutionNote:string|null};
 
 let client: ReturnType<typeof postgres> | null = null;
 function db(){
@@ -17,48 +17,100 @@ function iso(v:unknown){ return v instanceof Date?v.toISOString():String(v); }
 export function id(prefix:string){ return `${prefix}_${crypto.randomBytes(8).toString('hex')}`; }
 export function customerCode(){ return 'RZX-'+crypto.randomBytes(4).toString('hex').toUpperCase(); }
 export function customerToken(){ return crypto.randomBytes(24).toString('base64url'); }
-export function hashPassword(password:string, salt=crypto.randomBytes(16).toString('hex')){ return {salt,hash:crypto.pbkdf2Sync(password,Buffer.from(salt,'hex'),210000,32,'sha256').toString('hex')}; }
-export function verifyPassword(password:string,salt:string,hash:string){ const actual=crypto.pbkdf2Sync(password,Buffer.from(salt,'hex'),210000,32,'sha256'); const expected=Buffer.from(hash,'hex'); return actual.length===expected.length && crypto.timingSafeEqual(actual,expected); }
+export function hashPassword(password:string, salt=crypto.randomBytes(16).toString('hex')){ const out=crypto.scryptSync(password,Buffer.from(salt,'hex'),32,{N:16384,r:8,p:1,maxmem:64*1024*1024}); return {salt,hash:'scrypt$'+out.toString('hex')}; }
+export function verifyPassword(password:string,salt:string,hash:string){ try{if(hash.startsWith('scrypt$')){const expected=Buffer.from(hash.slice(7),'hex');const actual=crypto.scryptSync(password,Buffer.from(salt,'hex'),expected.length,{N:16384,r:8,p:1,maxmem:64*1024*1024});return actual.length===expected.length&&crypto.timingSafeEqual(actual,expected)}const actual=crypto.pbkdf2Sync(password,Buffer.from(salt,'hex'),210000,32,'sha256');const expected=Buffer.from(hash,'hex');return actual.length===expected.length&&crypto.timingSafeEqual(actual,expected)}catch{return false} }
+export function normalizeSlug(value:string){return value.toLowerCase().trim().replace(/[^a-z0-9äöüß-]+/g,'-').replace(/[ä]/g,'ae').replace(/[ö]/g,'oe').replace(/[ü]/g,'ue').replace(/[ß]/g,'ss').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,60)}
+function mapBusiness(r:any):Business{return {id:r.id,slug:r.slug,name:r.name,rewardTarget:r.reward_target,rewardText:r.reward_text,logoUrl:r.logo_url||null,stampUrl:r.stamp_url||null,active:r.active,createdAt:iso(r.created_at),billingPlan:(r.billing_plan||'trial'),subscriptionStatus:r.subscription_status||'trialing',trialStartedAt:r.trial_started_at?iso(r.trial_started_at):null,trialEndsAt:r.trial_ends_at?iso(r.trial_ends_at):null,stripeCustomerId:r.stripe_customer_id||null,stripeSubscriptionId:r.stripe_subscription_id||null,stripePriceId:r.stripe_price_id||null,subscriptionCurrentPeriodEnd:r.subscription_current_period_end?iso(r.subscription_current_period_end):null,cancelAtPeriodEnd:!!r.cancel_at_period_end,billingGraceUntil:r.billing_grace_until?iso(r.billing_grace_until):null,billingUpdatedAt:r.billing_updated_at?iso(r.billing_updated_at):null}}
+function mapStaff(r:any):StaffUser{return {id:r.id,businessId:r.business_id,name:r.name,email:r.email,passwordSalt:r.password_salt,passwordHash:r.password_hash,role:r.role,active:r.active,createdAt:iso(r.created_at),emailVerifiedAt:r.email_verified_at?iso(r.email_verified_at):null}}
+function mapCustomer(r:any):Customer{ return {id:r.id,businessId:r.business_id,code:r.code,token:r.token,name:r.name,phone:r.phone,stamps:r.stamps,rewardsRedeemed:r.rewards_redeemed,createdAt:iso(r.created_at),lastVisitAt:r.last_visit_at?iso(r.last_visit_at):null,active:r.active!==false,privacyNoticeAckAt:r.privacy_notice_ack_at?iso(r.privacy_notice_ack_at):null,marketingConsent:!!r.marketing_consent,marketingConsentAt:r.marketing_consent_at?iso(r.marketing_consent_at):null,anonymizedAt:r.anonymized_at?iso(r.anonymized_at):null}; }
 
-export async function getBusiness():Promise<Business|null>{
-  const rows=await db()`select name,reward_target,reward_text,created_at from businesses where id='main' limit 1`;
-  if(!rows[0]) return null;
-  const r=rows[0]; return {name:r.name,rewardTarget:r.reward_target,rewardText:r.reward_text,createdAt:iso(r.created_at)};
+export async function listBusinesses():Promise<Business[]>{const rows=await db()`select * from businesses order by created_at desc`;return rows.map(mapBusiness)}
+export async function getBusinessById(businessId:string):Promise<Business|null>{const rows=await db()`select * from businesses where id=${businessId} limit 1`;return rows[0]?mapBusiness(rows[0]):null}
+export async function getBusinessBySlug(slug:string):Promise<Business|null>{const rows=await db()`select * from businesses where slug=${slug} and active=true limit 1`;return rows[0]?mapBusiness(rows[0]):null}
+export async function businessSlugExists(slug:string){const rows=await db()`select 1 from businesses where slug=${slug} limit 1`;return rows.length>0}
+export async function createBusinessWithManager(input:{name:string;slug:string;rewardTarget:number;rewardText:string;logoUrl?:string|null;stampUrl?:string|null;managerName:string;managerEmail:string;managerPassword:string}){
+  const businessId=id('biz'); const managerId=id('usr'); const p=hashPassword(input.managerPassword);
+  return db().begin(async(tx:any)=>{
+    await tx`insert into businesses (id,slug,name,reward_target,reward_text,logo_url,stamp_url,billing_plan,subscription_status,trial_started_at,trial_ends_at) values (${businessId},${input.slug},${input.name},${input.rewardTarget},${input.rewardText},${input.logoUrl||null},${input.stampUrl||null},'trial','trialing',now(),now()+interval '14 days')`;
+    await tx`insert into staff_users (id,business_id,name,email,password_salt,password_hash,role) values (${managerId},${businessId},${input.managerName},${input.managerEmail},${p.salt},${p.hash},'manager')`;
+    return {businessId,managerId};
+  });
 }
-export async function saveBusiness(input:{name:string;rewardTarget:number;rewardText:string}){
-  await db()`insert into businesses (id,name,reward_target,reward_text) values ('main',${input.name},${input.rewardTarget},${input.rewardText}) on conflict (id) do update set name=excluded.name,reward_target=excluded.reward_target,reward_text=excluded.reward_text`;
-}
-export async function getStaffByEmail(email:string):Promise<StaffUser|null>{
-  const rows=await db()`select * from staff_users where email=${email} and active=true limit 1`; if(!rows[0]) return null; const r=rows[0];
-  return {id:r.id,name:r.name,email:r.email,passwordSalt:r.password_salt,passwordHash:r.password_hash,role:r.role,active:r.active,createdAt:iso(r.created_at)};
-}
+export async function updateBusinessAssets(businessId:string, logoUrl:string|null, stampUrl:string|null){await db()`update businesses set logo_url=coalesce(${logoUrl},logo_url),stamp_url=coalesce(${stampUrl},stamp_url) where id=${businessId}`}
+export async function getStaffByEmail(email:string):Promise<StaffUser|null>{ const rows=await db()`select * from staff_users where email=${email} and active=true limit 1`; return rows[0]?mapStaff(rows[0]):null; }
 export async function staffEmailExists(email:string){ const rows=await db()`select 1 from staff_users where email=${email} limit 1`; return rows.length>0; }
-export async function createStaff(input:{name:string;email:string;password:string;role:'staff'|'manager'}){ const p=hashPassword(input.password); await db()`insert into staff_users (id,name,email,password_salt,password_hash,role) values (${id('usr')},${input.name},${input.email},${p.salt},${p.hash},${input.role})`; }
-export async function getCustomerByToken(token:string):Promise<Customer|null>{ const rows=await db()`select * from customers where token=${token} limit 1`; return rows[0]?mapCustomer(rows[0]):null; }
-export async function getCustomerByPhone(phone:string):Promise<Customer|null>{ const rows=await db()`select * from customers where phone=${phone} limit 1`; return rows[0]?mapCustomer(rows[0]):null; }
-export async function createCustomer(input:{name:string;phone:string}):Promise<Customer>{
-  const c={id:id('cus'),code:customerCode(),token:customerToken(),name:input.name,phone:input.phone};
-  const rows=await db()`insert into customers (id,code,token,name,phone) values (${c.id},${c.code},${c.token},${c.name},${c.phone}) returning *`; return mapCustomer(rows[0]);
-}
-export async function getDashboardData(){
-  const [business, customers, staffCount, visitCount, visitsToday]=await Promise.all([
-    getBusiness(),
-    db()`select * from customers order by created_at desc limit 8`,
-    db()`select count(*)::int as count from staff_users`,
-    db()`select count(*)::int as count from visits`,
-    db()`select count(*)::int as count from visits where type='stamp' and created_at >= date_trunc('day', now())`
+export async function createStaff(input:{businessId:string;name:string;email:string;password:string;role:'friseur'}){ const p=hashPassword(input.password); const staffId=id('usr'); await db()`insert into staff_users (id,business_id,name,email,password_salt,password_hash,role,email_verified_at) values (${staffId},${input.businessId},${input.name},${input.email},${p.salt},${p.hash},${input.role},null)`; return staffId; }
+
+export async function getStaffById(idValue:string):Promise<StaffUser|null>{const rows=await db()`select * from staff_users where id=${idValue} and active=true limit 1`;return rows[0]?mapStaff(rows[0]):null}
+export async function markStaffEmailVerified(staffId:string){await db()`update staff_users set email_verified_at=coalesce(email_verified_at,now()) where id=${staffId}`}
+export async function updateStaffPassword(staffId:string,password:string){const p=hashPassword(password);await db()`update staff_users set password_salt=${p.salt},password_hash=${p.hash},password_changed_at=now() where id=${staffId}`}
+export async function getCustomerByToken(token:string):Promise<Customer|null>{ const rows=await db()`select * from customers where token=${token} and active=true limit 1`; return rows[0]?mapCustomer(rows[0]):null; }
+export async function getCustomerByPhone(businessId:string,phone:string):Promise<Customer|null>{ const rows=await db()`select * from customers where business_id=${businessId} and phone=${phone} limit 1`; return rows[0]?mapCustomer(rows[0]):null; }
+export async function createCustomer(input:{businessId:string;name:string;phone:string;marketingConsent?:boolean}):Promise<Customer>{ const c={id:id('cus'),code:customerCode(),token:customerToken(),name:input.name,phone:input.phone}; const marketing=!!input.marketingConsent; const rows=await db()`insert into customers (id,business_id,code,token,name,phone,privacy_notice_ack_at,marketing_consent,marketing_consent_at) values (${c.id},${input.businessId},${c.code},${c.token},${c.name},${c.phone},now(),${marketing},${marketing?new Date():null}) returning *`; return mapCustomer(rows[0]); }
+export async function getDashboardData(businessId:string){
+  const [business,customers,staffCount,visitCount,visitsToday,totalCustomers]=await Promise.all([
+    getBusinessById(businessId),
+    db()`select * from customers where business_id=${businessId} and active=true order by created_at desc limit 8`,
+    db()`select count(*)::int as count from staff_users where business_id=${businessId} and role = 'friseur'`,
+    db()`select count(*)::int as count from visits where business_id=${businessId}`,
+    db()`select count(*)::int as count from visits where business_id=${businessId} and type='stamp' and created_at >= date_trunc('day', now())`,
+    db()`select count(*)::int as count from customers where business_id=${businessId} and active=true`
   ]);
-  const totalCustomers=await db()`select count(*)::int as count from customers`;
   return {business,customers:customers.map(mapCustomer),staffCount:staffCount[0]?.count??0,visitCount:visitCount[0]?.count??0,visitsToday:visitsToday[0]?.count??0,totalCustomers:totalCustomers[0]?.count??0};
 }
-export async function addStampAtomic(code:string,staffId:string){
+export async function addStampAtomic(code:string,staffId:string,businessId:string){
   return db().begin(async (tx:any)=>{
-    const b=await tx`select reward_target from businesses where id='main' for update`; if(!b[0]) return {kind:'no-business' as const};
-    const c=await tx`select * from customers where code=${code} for update`; if(!c[0]) return {kind:'not-found' as const};
+    const b=await tx`select reward_target from businesses where id=${businessId} and active=true for update`; if(!b[0]) return {kind:'no-business' as const};
+    const c=await tx`select * from customers where code=${code} and business_id=${businessId} and active=true for update`; if(!c[0]) return {kind:'not-found' as const};
     if(c[0].stamps>=b[0].reward_target) return {kind:'reward-ready' as const};
     const updated=await tx`update customers set stamps=stamps+1,last_visit_at=now() where id=${c[0].id} returning *`;
-    await tx`insert into visits (id,customer_id,staff_id,type) values (${id('vis')},${c[0].id},${staffId},'stamp')`;
+    await tx`insert into visits (id,business_id,customer_id,staff_id,type) values (${id('vis')},${businessId},${c[0].id},${staffId},'stamp')`;
     return {kind:'ok' as const,customer:mapCustomer(updated[0]),target:b[0].reward_target as number};
   });
 }
-function mapCustomer(r:any):Customer{ return {id:r.id,code:r.code,token:r.token,name:r.name,phone:r.phone,stamps:r.stamps,rewardsRedeemed:r.rewards_redeemed,createdAt:iso(r.created_at),lastVisitAt:r.last_visit_at?iso(r.last_visit_at):null}; }
+
+
+export async function addConsentRecord(input:{businessId:string;customerId:string;type:'privacy_notice'|'marketing';granted:boolean;policyVersion:string;ipHash?:string|null;userAgent?:string|null}){
+  await db()`insert into consent_records (id,business_id,customer_id,consent_type,granted,policy_version,ip_hash,user_agent) values (${id('con')},${input.businessId},${input.customerId},${input.type},${input.granted},${input.policyVersion},${input.ipHash??null},${input.userAgent?.slice(0,500)??null})`;
+}
+export async function getCustomerExport(customerId:string,businessId:string){
+  const [customer,business,visits,consents,requests]=await Promise.all([
+    db()`select id,name,phone,code,stamps,rewards_redeemed,created_at,last_visit_at,marketing_consent,marketing_consent_at,privacy_notice_ack_at from customers where id=${customerId} and business_id=${businessId} limit 1`,
+    db()`select id,slug,name,reward_target,reward_text from businesses where id=${businessId} limit 1`,
+    db()`select type,created_at from visits where customer_id=${customerId} and business_id=${businessId} order by created_at asc`,
+    db()`select consent_type,granted,policy_version,created_at from consent_records where customer_id=${customerId} order by created_at asc`,
+    db()`select request_type,status,requested_at,resolved_at,resolution_note from privacy_requests where customer_id=${customerId} order by requested_at asc`
+  ]);
+  if(!customer[0]||!business[0]) return null;
+  return {exportedAt:new Date().toISOString(),customer:customer[0],salon:business[0],visits,consents,privacyRequests:requests};
+}
+export async function createPrivacyRequest(customerId:string,businessId:string,requestType:'access'|'erasure'){
+  const open=await db()`select id from privacy_requests where customer_id=${customerId} and business_id=${businessId} and request_type=${requestType} and status='pending' limit 1`;
+  if(open[0]) return open[0].id as string;
+  const requestId=id('prv');
+  await db()`insert into privacy_requests (id,business_id,customer_id,request_type) values (${requestId},${businessId},${customerId},${requestType})`;
+  return requestId;
+}
+export async function listPrivacyRequests(businessId:string):Promise<PrivacyRequest[]>{
+  const rows=await db()`select p.id,p.business_id,p.customer_id,p.request_type,p.status,p.requested_at,p.resolved_at,p.resolution_note,c.name as customer_name,c.phone as customer_phone from privacy_requests p join customers c on c.id=p.customer_id where p.business_id=${businessId} order by case when p.status='pending' then 0 else 1 end,p.requested_at desc limit 100`;
+  return rows.map((r:any)=>({id:r.id,businessId:r.business_id,customerId:r.customer_id,customerName:r.customer_name,customerPhone:r.customer_phone,requestType:r.request_type,status:r.status,requestedAt:iso(r.requested_at),resolvedAt:r.resolved_at?iso(r.resolved_at):null,resolutionNote:r.resolution_note||null}));
+}
+export async function resolvePrivacyRequest(input:{requestId:string;businessId:string;managerId:string;decision:'completed'|'rejected';note?:string}){
+  return db().begin(async(tx:any)=>{
+    const reqs=await tx`select * from privacy_requests where id=${input.requestId} and business_id=${input.businessId} and status='pending' for update`;
+    if(!reqs[0]) return {kind:'not-found' as const};
+    const r=reqs[0];
+    if(input.decision==='completed' && r.request_type==='erasure'){
+      const anonPhone=`deleted-${crypto.randomBytes(10).toString('hex')}`;
+      const anonToken=customerToken();
+      await tx`update customers set name='Gelöschter Kunde',phone=${anonPhone},token=${anonToken},active=false,marketing_consent=false,marketing_consent_at=null,anonymized_at=now() where id=${r.customer_id} and business_id=${input.businessId}`;
+    }
+    await tx`update privacy_requests set status=${input.decision},resolved_at=now(),resolved_by=${input.managerId},resolution_note=${input.note?.slice(0,500)||null} where id=${input.requestId}`;
+    return {kind:'ok' as const,customerId:r.customer_id as string,requestType:r.request_type as 'access'|'erasure'};
+  });
+}
+
+export async function updateMarketingConsent(customerId:string,businessId:string,granted:boolean){
+  const rows=await db()`update customers set marketing_consent=${granted},marketing_consent_at=${granted?new Date():null} where id=${customerId} and business_id=${businessId} and active=true returning *`;
+  return rows[0]?mapCustomer(rows[0]):null;
+}

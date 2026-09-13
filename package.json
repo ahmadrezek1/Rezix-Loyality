@@ -1,23 +1,23 @@
 {
   "name": "rezix-loyalty",
-  "version": "0.2.0",
+  "version": "0.7.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "db:init": "node scripts/db-init.mjs"
+    "db:init": "node scripts/db-init.mjs",
+    "db:migrate": "node scripts/db-migrate.mjs"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.116.0",
-    "dotenv": "^17.4.2",
     "lucide-react": "^0.468.0",
-    "next": "^15.5.24",
-    "postgres": "^3.4.9",
+    "next": "15.5.24",
+    "postgres": "^3.4.7",
     "qrcode.react": "^4.2.0",
     "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "react-dom": "19.1.1",
+    "dotenv": "^17.2.2",
+    "stripe": "^18.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

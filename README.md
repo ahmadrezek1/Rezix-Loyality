@@ -1,75 +1,102 @@
-# Rezix Loyalty — PostgreSQL Production Base
+# Rezix Loyalty v0.7 — Multi-Salon + Secure Authentication
 
-Rezix Loyalty ist ein digitales Treuekartensystem für Barbershops. Diese Version enthält **keine Demo-Kunden und keine Demo-Mitarbeiter**. Die Datenbank startet leer.
+Rezix Loyalty ist eine mandantenfähige Loyalty-Plattform für Friseursalons. Ein globaler Rezix-Admin registriert Salons, jeder Salon erhält einen Manager, Friseure und eigene Kundenkarten/Branding-Daten.
 
-## Bereiche
+## Rollen und URLs
 
-- `/` — öffentliche Kundenkarte / Registrierung
-- `/admin/login` — Administrator-Login
-- `/owner` — geschütztes Owner Dashboard
-- `/staff/login` — Mitarbeiter-Login
-- `/staff` — geschützter Mitarbeiterbereich
+- `/admin/login` — globaler Rezix Admin
+- `/admin` — Salonverwaltung
+- `/manager/login` — Manager Login
+- `/manager` — Salon Dashboard
+- `/friseur/login` — Friseur Login
+- `/friseur` — Kunden erfassen / Stempel vergeben
+- `/s/<slug>` — öffentliche Loyalty-Seite eines Salons
 
-Kunden erhalten aus der öffentlichen Oberfläche keinen Link zum Owner- oder Staff-Bereich. Die Admin- und Staff-Seiten sind zusätzlich serverseitig durch Sessions geschützt.
+Die Kundenseite enthält keine Links zu Admin-, Manager- oder Friseur-Bereichen.
 
-## Datenbank
+## v0.7 Authentication
 
-Die Anwendung verwendet PostgreSQL über `DATABASE_URL` und ist für Supabase/Neon bzw. andere PostgreSQL-Anbieter geeignet. Für Vercel sollte nach Möglichkeit die gepoolte/serverless Connection-URL des Providers verwendet werden.
+- Admin + Manager: verpflichtende TOTP-2FA (Authenticator App)
+- Manager + Friseur: E-Mail-Verifizierung
+- Manager + Friseur: Passwort-Reset per Einmal-Link
+- Kunde: SMS-OTP zur Bestätigung der Telefonnummer
+- Sessions serverseitig registriert und widerrufbar
+- Passwort-Reset beendet bestehende Sessions
+- neue Mitarbeiter-Passwörter mit `scrypt`; alte PBKDF2-Hashes bleiben kompatibel
+- Audit Log für Auth-Ereignisse
 
-### 1. Umgebungsvariablen
+Details: `V0.6-AUTH.md` und `TESTING-V0.6.md`.
 
-Kopiere `.env.example` zu `.env.local` und trage die PostgreSQL-Verbindung ein:
+## Environment Variables
 
-```env
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:6543/postgres?sslmode=require
-```
+Kopiere `.env.example` nach `.env.local`.
 
-Die Admin-E-Mail und der PBKDF2-Hash für den initialen Administrator sind bereits vorbereitet. Das Klartext-Passwort ist nicht im Quellcode gespeichert.
+### Core
+- `DATABASE_URL`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `REZIX_ADMIN_EMAIL`
+- `REZIX_ADMIN_PASSWORD_SALT`
+- `REZIX_ADMIN_PASSWORD_HASH`
+- `REZIX_SESSION_SECRET`
+- `REZIX_DATA_ENCRYPTION_KEY`
+- `NEXT_PUBLIC_APP_URL=https://loyalty.rezix.at`
 
-Setze für Production unbedingt einen eigenen langen Wert für:
+### E-Mail
+- `RESEND_API_KEY`
+- `REZIX_EMAIL_FROM=Rezix <noreply@rezix.at>`
 
-```env
-REZIX_SESSION_SECRET=...
-```
+### SMS OTP
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_FROM_NUMBER`
 
-### 2. Installation
+### Legal / GDPR
+Siehe `.env.example` für `REZIX_LEGAL_*` und `REZIX_PRIVACY_EMAIL`.
+
+## Upgrade einer bestehenden Installation
+
+Vorher Supabase Backup erstellen. Dann:
 
 ```bash
 npm install
-```
-
-### 3. Datenbanktabellen anlegen
-
-```bash
-npm run db:init
-```
-
-Der SQL-Stand befindet sich zusätzlich in `db/schema.sql` und kann direkt im Supabase SQL Editor ausgeführt werden.
-
-### 4. Lokal starten
-
-```bash
+npm run db:migrate
+npm run build
 npm run dev
 ```
 
-Öffne `http://localhost:3000/admin/login` und melde dich mit dem initialen Administrator an. Beim ersten Start wird der First Setup Flow angezeigt. Erst dort werden echte Shopdaten angelegt.
+`db:migrate` führt alle Migrationen bis einschließlich v0.7 aus.
+
+Bei einer komplett frischen Datenbank:
+
+```bash
+npm run db:init
+npm run db:migrate
+```
+
+## Erster Login nach v0.7
+
+1. Admin meldet sich mit dem bestehenden Admin-Passwort an.
+2. Rezix verlangt die Einrichtung einer Authenticator-App.
+3. Recovery Codes sicher offline speichern.
+4. Neue Manager müssen ihre E-Mail bestätigen und danach 2FA einrichten.
+5. Neue Friseure müssen ihre E-Mail vor dem ersten Login bestätigen.
+6. Kunden bestätigen ihre Telefonnummer mit SMS-OTP.
 
 ## Vercel
 
-1. Projekt zu Vercel hochladen.
-2. `DATABASE_URL`, `REZIX_ADMIN_EMAIL`, `REZIX_ADMIN_PASSWORD_SALT`, `REZIX_ADMIN_PASSWORD_HASH` und `REZIX_SESSION_SECRET` unter Environment Variables eintragen.
-3. Einmal `db/schema.sql` in Supabase ausführen oder lokal `npm run db:init` gegen dieselbe Datenbank ausführen.
-4. Deployment starten.
+Alle Secrets nur unter **Project → Settings → Environment Variables** setzen. `.env.local` niemals committen.
 
-## Sicherheit
+Für PostgreSQL auf Vercel den Supabase Transaction Pooler verwenden.
 
-- Admin-Passwort wird nur als PBKDF2-SHA256 Hash + Salt gespeichert.
-- Staff-Passwörter werden ebenfalls PBKDF2-gehasht in PostgreSQL gespeichert.
-- Session-Cookie ist `HttpOnly`, `SameSite=Lax` und in Production `Secure`.
-- Stempel können nur von authentifizierten Staff/Manager-Sessions vergeben werden.
-- Die Stempelvergabe läuft in einer PostgreSQL-Transaktion mit Row Lock und ist damit gegen parallele Doppel-Updates geschützt.
-- Es werden keine Demo-Daten automatisch erzeugt.
+## Sicherheitshinweise
 
-## Nächste Production-Schritte
+- `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `REZIX_SESSION_SECRET`, `REZIX_DATA_ENCRYPTION_KEY`, Twilio- und Resend-Secrets niemals in GitHub speichern.
+- Recovery Codes nicht in Support-Tickets oder Logs kopieren.
+- In Production gibt es keinen Console-Fallback für E-Mail/SMS.
+- Nach Änderungen an Auth-Secrets müssen aktive Sessions ggf. erneut angemeldet werden.
 
-Für einen öffentlichen Launch sollten als nächstes Phone-OTP/Verifizierung, Rate Limiting, Reward Redemption, Audit Log, Passwort-Reset und automatisierte Backups ergänzt werden.
+
+## v0.7 Stripe Billing
+
+Rezix enthält Stripe Checkout, Customer Portal, Webhooks, Testphase und Tariflimits. Einrichtung: `V0.7-STRIPE.md`.

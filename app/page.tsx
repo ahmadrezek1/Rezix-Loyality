@@ -1,1 +1,1 @@
-import CustomerApp from '@/components/CustomerApp'; export default function Page(){return <CustomerApp/>}
+export default function Home(){return <main><section className="join"><div className="join-card"><img src="/icon.svg" alt="Rezix"/><span className="eyebrow">REZIX LOYALTY</span><h1>Digitale Treuekarten für Barbershops.</h1><p>Öffne den persönlichen Link oder QR-Code deines Salons, um deine Treuekarte zu verwenden.</p></div></section></main>}
