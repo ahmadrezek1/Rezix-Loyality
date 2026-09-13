@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 210" role="img" aria-label="Rezix Loyalty">
+  <rect width="720" height="210" rx="34" fill="#ffffff"/>
+  <g transform="translate(32 22) scale(.30)">
+    <path d="M116 170h190c61 0 101 34 101 88 0 43-26 74-70 85l74 82h-88l-68-76h-62v76h-77V282h185c19 0 30-9 30-24 0-16-11-24-30-24H116z" fill="#0f172a"/>
+    <path d="M116 170l77 64v48l-77-62z" fill="#2563eb"/>
+    <path d="M199 117l33 28 31-43 31 43 34-28-10 66H209z" fill="#2563eb"/>
+  </g>
+  <text x="190" y="104" font-family="Arial,Helvetica,sans-serif" font-size="78" font-weight="800" letter-spacing="2" fill="#0f172a">REZIX</text>
+  <text x="196" y="148" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" letter-spacing="12" fill="#2563eb">LOYALTY</text>
+</svg>

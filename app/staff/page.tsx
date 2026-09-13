@@ -1,2 +1,10 @@
-import { requireStaff } from '@/lib/auth'; import StaffConsole from '@/components/StaffConsole';
-export default async function StaffPage(){const s=await requireStaff();return <main><header className="topbar"><div className="brand"><img src="/icon.svg" alt="Rezix"/><div><b>REZIX</b><span>STAFF</span></div></div><form method="post" action="/api/logout"><button type="submit" className="secondary">Abmelden</button></form></header><div className="shell"><div className="page-title"><div><span className="eyebrow">MITARBEITERBEREICH</span><h1>Hallo, {s.name||'Team'}</h1><p>Kundencode erfassen und einen echten Besuch protokollieren.</p></div><div className="pill">Geschützter Bereich</div></div><StaffConsole/></div></main>}
+import { currentSession } from '@/lib/auth';
+import { redirect } from 'next/navigation';
+export const dynamic='force-dynamic';
+export default async function LegacyStaff(){
+  const s=await currentSession();
+  if(s?.role==='friseur') redirect('/friseur');
+  if(s?.role==='manager') redirect('/manager');
+  if(s?.role==='admin') redirect('/admin');
+  redirect('/friseur/login');
+}
