@@ -3,8 +3,8 @@ import postgres from 'postgres';
 
 export type Business = { id:string; slug:string; name:string; rewardTarget:number; rewardText:string; logoUrl:string|null; stampUrl:string|null; active:boolean; createdAt:string; billingPlan:'trial'|'starter'|'professional'|'business'; subscriptionStatus:string; trialStartedAt:string|null; trialEndsAt:string|null; stripeCustomerId:string|null; stripeSubscriptionId:string|null; stripePriceId:string|null; subscriptionCurrentPeriodEnd:string|null; cancelAtPeriodEnd:boolean; billingGraceUntil:string|null; billingUpdatedAt:string|null };
 export type StaffUser = { id:string; businessId:string; name:string; email:string; passwordSalt:string; passwordHash:string; role:'manager'|'friseur'; active:boolean; createdAt:string; emailVerifiedAt:string|null };
-export type Customer = { id:string; businessId:string; code:string; token:string; name:string; phone:string; stamps:number; rewardsRedeemed:number; createdAt:string; lastVisitAt:string|null; active:boolean; privacyNoticeAckAt:string|null; marketingConsent:boolean; marketingConsentAt:string|null; anonymizedAt:string|null };
-export type PrivacyRequest={id:string;businessId:string;customerId:string;customerName:string;customerPhone:string;requestType:'access'|'erasure';status:'pending'|'completed'|'rejected';requestedAt:string;resolvedAt:string|null;resolutionNote:string|null};
+export type Customer = { id:string; businessId:string; code:string; token:string; name:string; email:string|null; phone:string|null; stamps:number; rewardsRedeemed:number; createdAt:string; lastVisitAt:string|null; active:boolean; privacyNoticeAckAt:string|null; marketingConsent:boolean; marketingConsentAt:string|null; anonymizedAt:string|null };
+export type PrivacyRequest={id:string;businessId:string;customerId:string;customerName:string;customerEmail:string|null;requestType:'access'|'erasure';status:'pending'|'completed'|'rejected';requestedAt:string;resolvedAt:string|null;resolutionNote:string|null};
 
 let client: ReturnType<typeof postgres> | null = null;
 function db(){
@@ -22,16 +22,16 @@ export function verifyPassword(password:string,salt:string,hash:string){ try{if(
 export function normalizeSlug(value:string){return value.toLowerCase().trim().replace(/[^a-z0-9äöüß-]+/g,'-').replace(/[ä]/g,'ae').replace(/[ö]/g,'oe').replace(/[ü]/g,'ue').replace(/[ß]/g,'ss').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,60)}
 function mapBusiness(r:any):Business{return {id:r.id,slug:r.slug,name:r.name,rewardTarget:r.reward_target,rewardText:r.reward_text,logoUrl:r.logo_url||null,stampUrl:r.stamp_url||null,active:r.active,createdAt:iso(r.created_at),billingPlan:(r.billing_plan||'trial'),subscriptionStatus:r.subscription_status||'trialing',trialStartedAt:r.trial_started_at?iso(r.trial_started_at):null,trialEndsAt:r.trial_ends_at?iso(r.trial_ends_at):null,stripeCustomerId:r.stripe_customer_id||null,stripeSubscriptionId:r.stripe_subscription_id||null,stripePriceId:r.stripe_price_id||null,subscriptionCurrentPeriodEnd:r.subscription_current_period_end?iso(r.subscription_current_period_end):null,cancelAtPeriodEnd:!!r.cancel_at_period_end,billingGraceUntil:r.billing_grace_until?iso(r.billing_grace_until):null,billingUpdatedAt:r.billing_updated_at?iso(r.billing_updated_at):null}}
 function mapStaff(r:any):StaffUser{return {id:r.id,businessId:r.business_id,name:r.name,email:r.email,passwordSalt:r.password_salt,passwordHash:r.password_hash,role:r.role,active:r.active,createdAt:iso(r.created_at),emailVerifiedAt:r.email_verified_at?iso(r.email_verified_at):null}}
-function mapCustomer(r:any):Customer{ return {id:r.id,businessId:r.business_id,code:r.code,token:r.token,name:r.name,phone:r.phone,stamps:r.stamps,rewardsRedeemed:r.rewards_redeemed,createdAt:iso(r.created_at),lastVisitAt:r.last_visit_at?iso(r.last_visit_at):null,active:r.active!==false,privacyNoticeAckAt:r.privacy_notice_ack_at?iso(r.privacy_notice_ack_at):null,marketingConsent:!!r.marketing_consent,marketingConsentAt:r.marketing_consent_at?iso(r.marketing_consent_at):null,anonymizedAt:r.anonymized_at?iso(r.anonymized_at):null}; }
+function mapCustomer(r:any):Customer{ return {id:r.id,businessId:r.business_id,code:r.code,token:r.token,name:r.name,email:r.email||null,phone:r.phone||null,stamps:r.stamps,rewardsRedeemed:r.rewards_redeemed,createdAt:iso(r.created_at),lastVisitAt:r.last_visit_at?iso(r.last_visit_at):null,active:r.active!==false,privacyNoticeAckAt:r.privacy_notice_ack_at?iso(r.privacy_notice_ack_at):null,marketingConsent:!!r.marketing_consent,marketingConsentAt:r.marketing_consent_at?iso(r.marketing_consent_at):null,anonymizedAt:r.anonymized_at?iso(r.anonymized_at):null}; }
 
-export async function listBusinesses():Promise<Business[]>{const rows=await db()`select * from businesses order by created_at desc`;return rows.map(mapBusiness)}
+export async function listBusinesses():Promise<Business[]>{const rows=await db()`select * from businesses where not (id='main' and slug='main') order by created_at desc`;return rows.map(mapBusiness)}
 export async function getBusinessById(businessId:string):Promise<Business|null>{const rows=await db()`select * from businesses where id=${businessId} limit 1`;return rows[0]?mapBusiness(rows[0]):null}
 export async function getBusinessBySlug(slug:string):Promise<Business|null>{const rows=await db()`select * from businesses where slug=${slug} and active=true limit 1`;return rows[0]?mapBusiness(rows[0]):null}
 export async function businessSlugExists(slug:string){const rows=await db()`select 1 from businesses where slug=${slug} limit 1`;return rows.length>0}
 export async function createBusinessWithManager(input:{name:string;slug:string;rewardTarget:number;rewardText:string;logoUrl?:string|null;stampUrl?:string|null;managerName:string;managerEmail:string;managerPassword:string}){
   const businessId=id('biz'); const managerId=id('usr'); const p=hashPassword(input.managerPassword);
   return db().begin(async(tx:any)=>{
-    await tx`insert into businesses (id,slug,name,reward_target,reward_text,logo_url,stamp_url,billing_plan,subscription_status,trial_started_at,trial_ends_at) values (${businessId},${input.slug},${input.name},${input.rewardTarget},${input.rewardText},${input.logoUrl||null},${input.stampUrl||null},'trial','trialing',now(),now()+interval '14 days')`;
+    await tx`insert into businesses (id,slug,name,reward_target,reward_text,logo_url,stamp_url,billing_plan,subscription_status,trial_started_at,trial_ends_at) values (${businessId},${input.slug},${input.name},${input.rewardTarget},${input.rewardText},${input.logoUrl||null},${input.stampUrl||null},'trial','trialing',now(),now()+interval '3 days')`;
     await tx`insert into staff_users (id,business_id,name,email,password_salt,password_hash,role) values (${managerId},${businessId},${input.managerName},${input.managerEmail},${p.salt},${p.hash},'manager')`;
     return {businessId,managerId};
   });
@@ -46,7 +46,8 @@ export async function markStaffEmailVerified(staffId:string){await db()`update s
 export async function updateStaffPassword(staffId:string,password:string){const p=hashPassword(password);await db()`update staff_users set password_salt=${p.salt},password_hash=${p.hash},password_changed_at=now() where id=${staffId}`}
 export async function getCustomerByToken(token:string):Promise<Customer|null>{ const rows=await db()`select * from customers where token=${token} and active=true limit 1`; return rows[0]?mapCustomer(rows[0]):null; }
 export async function getCustomerByPhone(businessId:string,phone:string):Promise<Customer|null>{ const rows=await db()`select * from customers where business_id=${businessId} and phone=${phone} limit 1`; return rows[0]?mapCustomer(rows[0]):null; }
-export async function createCustomer(input:{businessId:string;name:string;phone:string;marketingConsent?:boolean}):Promise<Customer>{ const c={id:id('cus'),code:customerCode(),token:customerToken(),name:input.name,phone:input.phone}; const marketing=!!input.marketingConsent; const rows=await db()`insert into customers (id,business_id,code,token,name,phone,privacy_notice_ack_at,marketing_consent,marketing_consent_at) values (${c.id},${input.businessId},${c.code},${c.token},${c.name},${c.phone},now(),${marketing},${marketing?new Date():null}) returning *`; return mapCustomer(rows[0]); }
+export async function getCustomerByEmail(businessId:string,email:string):Promise<Customer|null>{ const rows=await db()`select * from customers where business_id=${businessId} and lower(email)=lower(${email}) limit 1`; return rows[0]?mapCustomer(rows[0]):null; }
+export async function createCustomer(input:{businessId:string;name:string;email:string;marketingConsent?:boolean}):Promise<Customer>{ const c={id:id('cus'),code:customerCode(),token:customerToken(),name:input.name,email:input.email.toLowerCase()}; const marketing=!!input.marketingConsent; const rows=await db()`insert into customers (id,business_id,code,token,name,email,phone,privacy_notice_ack_at,marketing_consent,marketing_consent_at) values (${c.id},${input.businessId},${c.code},${c.token},${c.name},${c.email},null,now(),${marketing},${marketing?new Date():null}) returning *`; return mapCustomer(rows[0]); }
 export async function getDashboardData(businessId:string){
   const [business,customers,staffCount,visitCount,visitsToday,totalCustomers]=await Promise.all([
     getBusinessById(businessId),
@@ -75,7 +76,7 @@ export async function addConsentRecord(input:{businessId:string;customerId:strin
 }
 export async function getCustomerExport(customerId:string,businessId:string){
   const [customer,business,visits,consents,requests]=await Promise.all([
-    db()`select id,name,phone,code,stamps,rewards_redeemed,created_at,last_visit_at,marketing_consent,marketing_consent_at,privacy_notice_ack_at from customers where id=${customerId} and business_id=${businessId} limit 1`,
+    db()`select id,name,email,phone,code,stamps,rewards_redeemed,created_at,last_visit_at,marketing_consent,marketing_consent_at,privacy_notice_ack_at from customers where id=${customerId} and business_id=${businessId} limit 1`,
     db()`select id,slug,name,reward_target,reward_text from businesses where id=${businessId} limit 1`,
     db()`select type,created_at from visits where customer_id=${customerId} and business_id=${businessId} order by created_at asc`,
     db()`select consent_type,granted,policy_version,created_at from consent_records where customer_id=${customerId} order by created_at asc`,
@@ -92,8 +93,8 @@ export async function createPrivacyRequest(customerId:string,businessId:string,r
   return requestId;
 }
 export async function listPrivacyRequests(businessId:string):Promise<PrivacyRequest[]>{
-  const rows=await db()`select p.id,p.business_id,p.customer_id,p.request_type,p.status,p.requested_at,p.resolved_at,p.resolution_note,c.name as customer_name,c.phone as customer_phone from privacy_requests p join customers c on c.id=p.customer_id where p.business_id=${businessId} order by case when p.status='pending' then 0 else 1 end,p.requested_at desc limit 100`;
-  return rows.map((r:any)=>({id:r.id,businessId:r.business_id,customerId:r.customer_id,customerName:r.customer_name,customerPhone:r.customer_phone,requestType:r.request_type,status:r.status,requestedAt:iso(r.requested_at),resolvedAt:r.resolved_at?iso(r.resolved_at):null,resolutionNote:r.resolution_note||null}));
+  const rows=await db()`select p.id,p.business_id,p.customer_id,p.request_type,p.status,p.requested_at,p.resolved_at,p.resolution_note,c.name as customer_name,c.email as customer_email from privacy_requests p join customers c on c.id=p.customer_id where p.business_id=${businessId} order by case when p.status='pending' then 0 else 1 end,p.requested_at desc limit 100`;
+  return rows.map((r:any)=>({id:r.id,businessId:r.business_id,customerId:r.customer_id,customerName:r.customer_name,customerEmail:r.customer_email,requestType:r.request_type,status:r.status,requestedAt:iso(r.requested_at),resolvedAt:r.resolved_at?iso(r.resolved_at):null,resolutionNote:r.resolution_note||null}));
 }
 export async function resolvePrivacyRequest(input:{requestId:string;businessId:string;managerId:string;decision:'completed'|'rejected';note?:string}){
   return db().begin(async(tx:any)=>{
@@ -101,9 +102,9 @@ export async function resolvePrivacyRequest(input:{requestId:string;businessId:s
     if(!reqs[0]) return {kind:'not-found' as const};
     const r=reqs[0];
     if(input.decision==='completed' && r.request_type==='erasure'){
-      const anonPhone=`deleted-${crypto.randomBytes(10).toString('hex')}`;
+      const anonEmail=`deleted-${crypto.randomBytes(10).toString('hex')}@invalid.local`; const anonPhone=`deleted-${crypto.randomBytes(10).toString('hex')}`;
       const anonToken=customerToken();
-      await tx`update customers set name='Gelöschter Kunde',phone=${anonPhone},token=${anonToken},active=false,marketing_consent=false,marketing_consent_at=null,anonymized_at=now() where id=${r.customer_id} and business_id=${input.businessId}`;
+      await tx`update customers set name='Gelöschter Kunde',email=${anonEmail},phone=${anonPhone},token=${anonToken},active=false,marketing_consent=false,marketing_consent_at=null,anonymized_at=now() where id=${r.customer_id} and business_id=${input.businessId}`;
     }
     await tx`update privacy_requests set status=${input.decision},resolved_at=now(),resolved_by=${input.managerId},resolution_note=${input.note?.slice(0,500)||null} where id=${input.requestId}`;
     return {kind:'ok' as const,customerId:r.customer_id as string,requestType:r.request_type as 'access'|'erasure'};

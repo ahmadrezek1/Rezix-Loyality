@@ -14,9 +14,9 @@ alter table businesses add column if not exists billing_updated_at timestamptz n
 -- Existing salons receive one onboarding trial if billing was never initialized.
 update businesses
 set trial_started_at = coalesce(trial_started_at, now()),
-    trial_ends_at = coalesce(trial_ends_at, now() + interval '14 days'),
+    trial_ends_at = coalesce(trial_ends_at, now() + interval '3 days'),
     subscription_status = case
-      when stripe_subscription_id is null and coalesce(trial_ends_at, now() + interval '14 days') > now() then 'trialing'
+      when stripe_subscription_id is null and coalesce(trial_ends_at, now() + interval '3 days') > now() then 'trialing'
       when stripe_subscription_id is null then 'trial_expired'
       else subscription_status
     end,

@@ -28,7 +28,8 @@ create table if not exists customers (
   code text not null unique,
   token text not null unique,
   name text not null,
-  phone text not null,
+  email text,
+  phone text,
   stamps integer not null default 0 check (stamps >= 0),
   rewards_redeemed integer not null default 0 check (rewards_redeemed >= 0),
   created_at timestamptz not null default now(),
@@ -156,7 +157,8 @@ create table if not exists auth_mfa (
 create table if not exists customer_otp_challenges (
   id text primary key,
   business_id text not null references businesses(id) on delete cascade,
-  phone text not null,
+  email text,
+  phone text,
   otp_hash text not null,
   pending_name text,
   privacy_ack boolean not null default false,
@@ -167,6 +169,7 @@ create table if not exists customer_otp_challenges (
   created_at timestamptz not null default now()
 );
 create index if not exists customer_otp_phone_idx on customer_otp_challenges(business_id, phone, created_at desc);
+create index if not exists customer_otp_email_idx on customer_otp_challenges(business_id, lower(email), created_at desc);
 
 -- v0.7 Stripe Billing
 alter table businesses add column if not exists billing_plan text not null default 'trial';
