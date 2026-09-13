@@ -17,6 +17,8 @@ export async function requireFriseur(){const s=await currentSession();if(!s||s.r
 export function createPendingAuth(data:{role:'admin'|'manager';sub:string;name?:string;businessId?:string},minutes=10){const exp=Date.now()+minutes*60_000;const payload=Buffer.from(JSON.stringify({...data,exp,nonce:crypto.randomBytes(16).toString('hex')})).toString('base64url');return `${payload}.${sign(payload)}`}
 export function verifyPendingAuth(token?:string|null){if(!token)return null;const [p,s]=token.split('.');if(!p||!s||sign(p)!==s)return null;try{const d=JSON.parse(Buffer.from(p,'base64url').toString());return d.exp>Date.now()?d as {role:'admin'|'manager';sub:string;name?:string;businessId?:string;exp:number}:null}catch{return null}}
 export async function currentPendingAuth(){const c=await cookies();return verifyPendingAuth(c.get(pendingName)?.value)}
+
+
 export const SESSION_COOKIE=cookieName;
 export const PENDING_AUTH_COOKIE=pendingName;
 export const SESSION_COOKIE_OPTIONS={httpOnly:true,sameSite:'strict' as const,secure:process.env.NODE_ENV==='production',path:'/',maxAge:8*60*60};

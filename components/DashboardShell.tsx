@@ -1,8 +1,14 @@
 import Link from 'next/link';
-import { Home, Users, Scissors, CreditCard, Settings, Gift, LogOut, ScanLine, UserRoundSearch } from 'lucide-react';
+import { Home, Users, Scissors, CreditCard, Settings, Gift, LogOut, ScanLine, UserRoundSearch, Store, ShieldCheck } from 'lucide-react';
 
-export type DashboardRole='manager'|'friseur';
+export type DashboardRole='admin'|'manager'|'friseur';
 
+const adminItems=[
+ {href:'/admin#overview',label:'Übersicht',icon:Home},
+ {href:'/admin#salons',label:'Salons',icon:Store},
+ {href:'/admin#new-salon',label:'Salon anlegen',icon:Gift},
+ {href:'/admin#system',label:'System',icon:ShieldCheck},
+];
 const managerItems=[
  {href:'/manager#overview',label:'Übersicht',icon:Home},
  {href:'/manager#customers',label:'Kunden',icon:Users},
@@ -18,12 +24,12 @@ const friseurItems=[
 ];
 
 export default function DashboardShell({role,name,businessName,logoUrl,children}:{role:DashboardRole,name?:string|null,businessName?:string|null,logoUrl?:string|null,children:React.ReactNode}){
- const items=role==='manager'?managerItems:friseurItems;
+ const items=role==='admin'?adminItems:role==='manager'?managerItems:friseurItems;
  return <div className="dashboard-app">
   <aside className="dashboard-sidebar">
    <div className="sidebar-brand">
     <img src="/rezix-logo.svg" alt="Rezix"/>
-    <div><b>REZIX</b><span>{role==='manager'?'MANAGER':'FRISEUR'}</span></div>
+    <div><b>REZIX</b><span>{role==='admin'?'ADMIN':role==='manager'?'MANAGER':'FRISEUR'}</span></div>
    </div>
    <nav className="sidebar-nav">
     {items.map(({href,label,icon:Icon},i)=><Link key={href} href={href} className={`sidebar-link ${i===0?'active':''}`}><Icon size={19}/><span>{label}</span></Link>)}
@@ -40,7 +46,7 @@ export default function DashboardShell({role,name,businessName,logoUrl,children}
    <header className="dashboard-header">
     <div className="mobile-brand"><img src="/rezix-logo.svg" alt="Rezix"/><b>{businessName||'Rezix Loyalty'}</b></div>
     <div className="header-spacer"/>
-    <div className="header-role"><div className="sidebar-avatar small">{(name||role).slice(0,1).toUpperCase()}</div><div><b>{name||role}</b><span>{role==='manager'?'Manager':'Friseur'}</span></div></div>
+    <div className="header-role"><div className="sidebar-avatar small">{(name||role).slice(0,1).toUpperCase()}</div><div><b>{name||role}</b><span>{role==='admin'?'Admin':role==='manager'?'Manager':'Friseur'}</span></div></div>
    </header>
    <main className="dashboard-content">{children}</main>
   </div>
