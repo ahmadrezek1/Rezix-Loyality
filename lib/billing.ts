@@ -31,12 +31,14 @@ export async function assertCanCreateFriseur(business:Business){if(!billingOpera
 
 export async function ensureStripeCustomer(input:{business:Business;managerEmail:string;managerName:string}){
   if(input.business.stripeCustomerId)return input.business.stripeCustomerId;
-  const customer=await stripe().customers.create({email:input.managerEmail,name:input.business.name,metadata:{rezix_business_id:input.business.id,rezix_manager_name:input.managerName}});
+  const customer=await stripe().customers.create({email:input.managerEmail,name:input.business.name,metadata:{rezix_business_id:input.business.id,rezix_manager_name:input.managerName}},{idempotencyKey:`rezix-customer-${input.business.id}`});
   await db()`update businesses set stripe_customer_id=${customer.id},billing_updated_at=now() where id=${input.business.id}`;
   return customer.id;
 }
 
-export async function setCheckoutPending(businessId:string,customerId:string){await db()`update businesses set stripe_customer_id=coalesce(stripe_customer_id,${customerId}),subscription_status=case when subscription_status='trialing' then subscription_status else 'incomplete' end,billing_updated_at=now() where id=${businessId}`}
+// Opening Checkout is not a subscription status change. Only signed Stripe events
+// may activate or replace the existing billing status (including the local trial).
+export async function setCheckoutPending(businessId:string,customerId:string){await db()`update businesses set stripe_customer_id=coalesce(stripe_customer_id,${customerId}),billing_updated_at=now() where id=${businessId}`}
 
 export async function findBusinessByStripeCustomer(customerId:string){const r=await db()`select id from businesses where stripe_customer_id=${customerId} limit 1`;return r[0]?.id as string|undefined}
 export async function findBusinessBySubscription(subscriptionId:string){const r=await db()`select id from businesses where stripe_subscription_id=${subscriptionId} limit 1`;return r[0]?.id as string|undefined}

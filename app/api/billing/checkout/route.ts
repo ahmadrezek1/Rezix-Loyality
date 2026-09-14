@@ -15,10 +15,10 @@ export async function POST(req:Request){
   if(!['starter','professional','business'].includes(plan)||interval!=='monthly')return NextResponse.redirect(new URL('/manager/billing?error=plan',req.url),303);
   const [business,manager]=await Promise.all([getBusinessById(s.businessId),getStaffById(s.sub)]);
   if(!business||!manager)return NextResponse.redirect(new URL('/manager/billing?error=account',req.url),303);
-  if(business.stripeSubscriptionId&&['active','trialing','past_due','unpaid','paused'].includes(business.subscriptionStatus))return NextResponse.redirect(new URL('/manager/billing?manage=1',req.url),303);
+  if(business.stripeSubscriptionId&&!['canceled','incomplete_expired'].includes(business.subscriptionStatus))return NextResponse.redirect(new URL('/manager/billing?manage=1',req.url),303);
   try{
     const customerId=await ensureStripeCustomer({business,managerEmail:manager.email,managerName:manager.name});
-    const origin=process.env.NEXT_PUBLIC_APP_URL||new URL(req.url).origin;
+    const origin=new URL(process.env.NEXT_PUBLIC_APP_URL||req.url).origin;
     const session=await stripe().checkout.sessions.create({
       mode:'subscription',customer:customerId,
       line_items:[{price:priceId(plan,interval),quantity:1}],

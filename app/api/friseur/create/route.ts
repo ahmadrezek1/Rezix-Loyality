@@ -16,7 +16,7 @@ export async function POST(req:Request){
   let staffId:string;try{staffId=await createStaff({businessId:s.businessId,name,email,password,role:'friseur'});}catch{return NextResponse.redirect(new URL('/manager/friseure?friseurError=1',req.url),303);}
   const token=await createOneTimeToken(staffId,'friseur','email_verify',1440);
   const url=`${appBaseUrl(req)}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
-  const sent=await sendAuthEmail({to:email,subject:'Rezix – E-Mail bestätigen',html:`<h2>Willkommen bei Rezix</h2><p>Bestätige deine E-Mail-Adresse, bevor du dich als Friseur anmeldest.</p><p><a href="${url}">E-Mail bestätigen</a></p><p>Der Link ist 24 Stunden gültig.</p>`});
+  const sent=await sendAuthEmail({to:email,subject:'Rezix – E-Mail bestätigen',html:`<h2>Willkommen bei Rezix</h2><p>Bestätige deine E-Mail-Adresse, bevor du dich als Mitarbeiter anmeldest.</p><p><a href="${url}">E-Mail bestätigen</a></p><p>Der Link ist 24 Stunden gültig.</p>`});
   await audit({session:s,businessId:s.businessId,action:'friseur.created',targetType:'staff_user',targetId:staffId,req,metadata:{email,role:'friseur',name,emailSent:sent}});
   return NextResponse.redirect(new URL(`/manager/friseure?friseurAdded=1${sent?'':'&mailError=1'}`,req.url),303);
 }

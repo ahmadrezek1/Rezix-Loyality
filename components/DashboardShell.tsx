@@ -7,14 +7,14 @@ export type DashboardRole='admin'|'manager'|'friseur';
 
 const adminItems=[
  {href:'/admin',label:'Übersicht',icon:Home},
- {href:'/admin/salons',label:'Salons',icon:Store},
+ {href:'/admin/salons',label:'Betriebe',icon:Store},
  {href:'/admin/subscriptions',label:'Abonnements',icon:CreditCard},
  {href:'/admin/system',label:'Einstellungen',icon:ShieldCheck},
 ];
 const managerItems=[
  {href:'/manager',label:'Übersicht',icon:Home},
  {href:'/manager/customers',label:'Kunden',icon:Users},
- {href:'/manager/friseure',label:'Friseure',icon:Scissors},
+ {href:'/manager/friseure',label:'Mitarbeiter',icon:Scissors},
  {href:'/manager/loyalty',label:'Karten & Belohnungen',icon:Gift},
  {href:'/manager/billing',label:'Tarif & Abrechnung',icon:CreditCard},
  {href:'/manager/settings',label:'Einstellungen',icon:Settings},
@@ -33,7 +33,7 @@ export default function DashboardShell({role,name,businessName,logoUrl,children}
   <aside className="dashboard-sidebar">
    <div className="sidebar-brand">
     <img src="/rezix-logo.svg" alt="Rezix"/>
-    <div><b>REZIX</b><span>{role==='admin'?'ADMIN':role==='manager'?'MANAGER':'FRISEUR'}</span></div>
+    <div><b>REZIX</b><span>{role==='admin'?'ADMIN':role==='manager'?'MANAGER':'MITARBEITER'}</span></div>
    </div>
    <nav className="sidebar-nav" aria-label="Hauptnavigation">
     {items.map(({href,label,icon:Icon})=><Link key={href} href={href} aria-current={activeHref(href)?'page':undefined} title={label} className={`sidebar-link ${activeHref(href)?'active':''}`}><Icon size={19}/><span>{label}</span></Link>)}
@@ -50,7 +50,7 @@ export default function DashboardShell({role,name,businessName,logoUrl,children}
    <header className="dashboard-header">
     <div className="mobile-brand"><img src="/rezix-logo.svg" alt="Rezix"/><b>{businessName||'Rezix Loyalty'}</b></div>
     <div className="header-breadcrumb">Workspace <span>/</span> <b>{items.find(item=>activeHref(item.href))?.label}</b></div><div className="header-spacer"/><form className="mobile-logout" method="post" action="/api/logout"><button className="secondary" aria-label="Abmelden"><LogOut size={18}/></button></form>
-    <div className="header-role"><div className="sidebar-avatar small">{(name||role).slice(0,1).toUpperCase()}</div><div><b>{name||role}</b><span>{role==='admin'?'Admin':role==='manager'?'Manager':'Friseur'}</span></div></div>
+    <div className="header-role"><div className="sidebar-avatar small">{(name||role).slice(0,1).toUpperCase()}</div><div><b>{name||role}</b><span>{role==='admin'?'Admin':role==='manager'?'Manager':'Mitarbeiter'}</span></div></div>
    </header>
    <main className="dashboard-content">{children}</main>
   </div>

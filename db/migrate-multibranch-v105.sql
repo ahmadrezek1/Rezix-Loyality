@@ -1,0 +1,10 @@
+alter table businesses add column if not exists industry text not null default 'other';
+alter table businesses add column if not exists loyalty_program_type text not null default 'stamps';
+alter table businesses add column if not exists location_name text;
+alter table businesses add column if not exists street text;
+alter table businesses add column if not exists postal_code text;
+alter table businesses add column if not exists city text;
+alter table businesses add column if not exists country text not null default 'AT';
+alter table businesses add column if not exists website text;
+alter table businesses add column if not exists onboarding_completed boolean not null default false;
+alter table businesses add column if not exists counter_mode text not null default 'qr';

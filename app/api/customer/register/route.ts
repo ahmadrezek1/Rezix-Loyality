@@ -15,9 +15,9 @@ export async function POST(req:Request){
  const email=String(body?.email||'').trim().toLowerCase().slice(0,254);
  const privacyAcknowledged=body?.privacyAcknowledged===true;
  if(!slug||!name||!emailOk(email)||!privacyAcknowledged)return NextResponse.json({error:'Bitte Name, gültige E-Mail-Adresse sowie AGB/Datenschutzerklärung bestätigen.'},{status:400});
- const business=await getBusinessBySlug(slug);if(!business||!business.active)return NextResponse.json({error:'Salon ist nicht verfügbar'},{status:404});
+ const business=await getBusinessBySlug(slug);if(!business||!business.active)return NextResponse.json({error:'Betrieb ist nicht verfügbar'},{status:404});
  const existing=await getCustomerByEmail(business.id,email);
- if(!existing&&!billingOperational(business))return NextResponse.json({error:'Das Loyalty-Programm dieses Salons ist derzeit nicht aktiv.'},{status:402});
+ if(!existing&&!billingOperational(business))return NextResponse.json({error:'Das Loyalty-Programm dieses Betriebs ist derzeit nicht aktiv.'},{status:402});
  if(!await consumeRateLimit('customer-otp-email',business.id+'|'+email,5,15))return NextResponse.json({error:'Zu viele Codes angefordert. Bitte 15 Minuten warten.'},{status:429});
  const challenge=await createOtpChallenge({businessId:business.id,email,name:existing?.name||name,privacyAck:privacyAcknowledged,marketing:body?.marketingConsent===true});
  const sent=await sendAuthEmail({to:email,subject:`Dein Rezix Sicherheitscode für ${business.name}`,html:`<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto"><h2>Rezix Loyalty</h2><p>Dein Sicherheitscode für <b>${escapeHtml(business.name)}</b> lautet:</p><div style="font-size:34px;font-weight:800;letter-spacing:8px;padding:18px 0">${challenge.code}</div><p>Der Code ist 10 Minuten gültig. Wenn du diese Anmeldung nicht gestartet hast, kannst du diese E-Mail ignorieren.</p></div>`});
