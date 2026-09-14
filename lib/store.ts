@@ -1,20 +1,14 @@
 import { defaultCustomerDesign, type CustomerDesign } from './customer-design';
 import { billingOperational,friseurLimitFor } from './billing';
 import crypto from 'node:crypto';
-import postgres from 'postgres';
+import { database as db } from './db';
 
 export type Business = { customerDesign:CustomerDesign; id:string; slug:string; name:string; rewardTarget:number; rewardText:string; logoUrl:string|null; stampUrl:string|null; cardTitle:string; cardSubtitle:string; primaryColor:string; stampShape:'circle'|'rounded'|'square'; active:boolean; archivedAt:string|null; createdAt:string; billingPlan:'trial'|'starter'|'professional'|'business'; subscriptionStatus:string; trialStartedAt:string|null; trialEndsAt:string|null; stripeCustomerId:string|null; stripeSubscriptionId:string|null; stripePriceId:string|null; subscriptionCurrentPeriodEnd:string|null; cancelAtPeriodEnd:boolean; billingGraceUntil:string|null; billingUpdatedAt:string|null };
 export type StaffUser = { id:string; businessId:string; name:string; email:string; passwordSalt:string; passwordHash:string; role:'manager'|'friseur'; active:boolean; createdAt:string; emailVerifiedAt:string|null };
 export type Customer = { id:string; businessId:string; code:string; token:string; name:string; email:string|null; phone:string|null; stamps:number; rewardsRedeemed:number; createdAt:string; lastVisitAt:string|null; active:boolean; privacyNoticeAckAt:string|null; marketingConsent:boolean; marketingConsentAt:string|null; anonymizedAt:string|null };
 export type PrivacyRequest={id:string;businessId:string;customerId:string;customerName:string;customerEmail:string|null;requestType:'access'|'erasure';status:'pending'|'completed'|'rejected';requestedAt:string;resolvedAt:string|null;resolutionNote:string|null};
 
-let client: ReturnType<typeof postgres> | null = null;
-function db(){
-  const url=process.env.DATABASE_URL;
-  if(!url) throw new Error('DATABASE_URL fehlt');
-  if(!client) client=postgres(url,{ssl:'require',max:5,idle_timeout:20,connect_timeout:10,prepare:false});
-  return client;
-}
+
 function iso(v:unknown){ return v instanceof Date?v.toISOString():String(v); }
 export function id(prefix:string){ return `${prefix}_${crypto.randomBytes(8).toString('hex')}`; }
 export function customerCode(){ return 'RZX-'+crypto.randomBytes(4).toString('hex').toUpperCase(); }

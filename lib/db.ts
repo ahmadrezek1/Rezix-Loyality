@@ -1,6 +1,7 @@
 import postgres from 'postgres';
-let client:ReturnType<typeof postgres>|undefined;
+const shared=globalThis as typeof globalThis & {rezixDatabase?:ReturnType<typeof postgres>};
 export function database(){
  if(!process.env.DATABASE_URL)throw new Error('DATABASE_URL fehlt');
- return client??=postgres(process.env.DATABASE_URL,{ssl:'require',max:5,idle_timeout:20,connect_timeout:10,prepare:false});
+ // One small pool shared by auth, billing and dashboard queries in each instance.
+ return shared.rezixDatabase??=postgres(process.env.DATABASE_URL,{ssl:'require',max:2,idle_timeout:5,connect_timeout:10,prepare:false});
 }

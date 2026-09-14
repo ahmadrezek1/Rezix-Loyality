@@ -1,0 +1,2 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const load=require('./load-typescript.cjs');const {trialDisplay}=load('lib/trial-display.ts');
+test('three day trial displays 1/3 through 3/3 and expiration',()=>{const start='2026-01-01T00:00:00Z',end='2026-01-04T00:00:00Z',t=Date.parse(start);for(let i=0;i<3;i++)assert.equal(trialDisplay(end,'trialing',start,t+i*86400000),`3 Tage Testphase · ${i+1}/3`);assert.match(trialDisplay(end,'trialing',start,t+3*86400000),/3\/3 · beendet/);assert.equal(trialDisplay(end,'active',start,t),null);});

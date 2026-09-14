@@ -38,7 +38,7 @@ export default function DashboardShell({role,name,businessName,logoUrl,children}
    <nav className="sidebar-nav" aria-label="Hauptnavigation">
     {items.map(({href,label,icon:Icon})=><Link key={href} href={href} aria-current={activeHref(href)?'page':undefined} title={label} className={`sidebar-link ${activeHref(href)?'active':''}`}><Icon size={19}/><span>{label}</span></Link>)}
    </nav>
-   <div className="sidebar-bottom">
+   <div className="sidebar-bottom">{role!=='admin'&&<Link className="sidebar-link" href="/auth/quick-login"><ShieldCheck size={18}/><span>Schnell-Login einrichten</span></Link>}
     <div className="sidebar-profile">
      <div className="sidebar-avatar">{(name||role).slice(0,1).toUpperCase()}</div>
      <div><b>{name||role}</b><span>{businessName||'Rezix Loyalty'}</span></div>

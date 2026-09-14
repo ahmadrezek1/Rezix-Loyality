@@ -1,9 +1,7 @@
 import crypto from 'node:crypto';
-import postgres from 'postgres';
+import { database as db } from './db';
 import type { Session } from './auth';
 import { getStaffById } from './store';
-let client:ReturnType<typeof postgres>|null=null;
-function db(){const url=process.env.DATABASE_URL;if(!url)throw new Error('DATABASE_URL fehlt');if(!client)client=postgres(url,{ssl:'require',max:4,idle_timeout:20,connect_timeout:10,prepare:false});return client}
 const h=(v:string)=>crypto.createHash('sha256').update(v).digest('hex');
 const otpH=(v:string)=>crypto.createHmac('sha256',process.env.REZIX_SESSION_SECRET||'rezix-dev-only').update(v).digest('hex');
 const id=(p:string)=>`${p}_${crypto.randomBytes(10).toString('hex')}`;

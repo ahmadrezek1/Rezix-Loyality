@@ -1,9 +1,7 @@
 import crypto from 'node:crypto';
-import postgres from 'postgres';
+import { database as db } from './db';
 import type { Session } from './auth';
 
-let client: ReturnType<typeof postgres>|null=null;
-function db(){const url=process.env.DATABASE_URL;if(!url)throw new Error('DATABASE_URL fehlt');if(!client)client=postgres(url,{ssl:'require',max:3,idle_timeout:20,connect_timeout:10,prepare:false});return client}
 const rid=(p:string)=>`${p}_${crypto.randomBytes(10).toString('hex')}`;
 export function requestIp(req:Request){const h=req.headers;return (h.get('x-forwarded-for')?.split(',')[0]||h.get('x-real-ip')||'unknown').trim()}
 export function sameOrigin(req:Request){

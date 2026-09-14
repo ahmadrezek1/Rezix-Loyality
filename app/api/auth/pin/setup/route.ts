@@ -1,0 +1,7 @@
+import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
+import { currentSession } from '@/lib/auth';
+import { getStaffById,verifyPassword } from '@/lib/store';
+import { sameOrigin,consumeRateLimit,requestIp } from '@/lib/security';
+import { enablePin,pinCookie,pinCookieOptions,type PinRole } from '@/lib/pin-login';
+export async function POST(req:Request){if(!sameOrigin(req))return NextResponse.json({error:'Invalid origin'},{status:403});const s=await currentSession();if(!s||!['manager','friseur'].includes(s.role))return NextResponse.redirect(new URL('/manager/login',req.url),303);const fail=()=>NextResponse.redirect(new URL('/auth/quick-login?error=1',req.url),303);try{if(!await consumeRateLimit('pin-setup',s.sub+'|'+requestIp(req),5,15))return fail();const f=await req.formData();const pin=String(f.get('pin')||'');const user=await getStaffById(s.sub);if(!user||user.role!==s.role||!user.emailVerifiedAt||!/^\d{4}$/.test(pin)||pin!==f.get('confirm')||!verifyPassword(String(f.get('password')||''),user.passwordSalt,user.passwordHash))return fail();const role=s.role as PinRole;const token=await enablePin({id:user.id,role,passwordHash:user.passwordHash},pin,(await cookies()).get(pinCookie(role))?.value);const r=NextResponse.redirect(new URL('/auth/quick-login?saved=1',req.url),303);r.cookies.set(pinCookie(role),token,pinCookieOptions);return r;}catch{return fail();}}

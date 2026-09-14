@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import postgres from 'postgres';
+import { database as db } from './db';
 import Stripe from 'stripe';
 import type { Business } from './store';
 
@@ -13,8 +13,6 @@ export const BILLING_PLANS:PlanDefinition[]=[
   {key:'business',name:'Business',monthlyLabel:'79 €',friseurLimit:100,features:['Bis zu 100 Friseure','Erweiterte Administration','Priorisierter Support','Für wachsende Betriebe']}
 ];
 
-let client:ReturnType<typeof postgres>|null=null;
-function db(){const url=process.env.DATABASE_URL;if(!url)throw new Error('DATABASE_URL fehlt');if(!client)client=postgres(url,{ssl:'require',max:3,idle_timeout:20,connect_timeout:10,prepare:false});return client}
 let stripeClient:Stripe|null=null;
 export function stripe(){const key=process.env.STRIPE_SECRET_KEY;if(!key)throw new Error('STRIPE_SECRET_KEY fehlt');if(!stripeClient)stripeClient=new Stripe(key);return stripeClient}
 
