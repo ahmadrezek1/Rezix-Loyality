@@ -28,6 +28,11 @@ export async function POST(req:Request){
     if(!['color','gradient','image'].includes(mode)||!/^#[0-9a-f]{6}$/i.test(color)||!/^#[0-9a-f]{6}$/i.test(gradientColor)||!Number.isFinite(overlay)||overlay<0||overlay>1||!['center','top','bottom'].includes(position)||!['cover','contain'].includes(size))return NextResponse.redirect(new URL('/manager/loyalty?configError=1',req.url),303);
     customerDesign={mode:mode as CustomerDesign['mode'],color,gradientColor,overlay,position:position as CustomerDesign['position'],size:size as CustomerDesign['size'],imageUrl:f.get('removeBackground')==='on'?null:business.customerDesign.imageUrl};
   }
+  if(customerDesign){
+    for(const key of ['textColor','headingColor','mutedColor'] as const){if(f.has(key)){const value=String(f.get(key));if(!/^#[0-9a-f]{6}$/i.test(value))return NextResponse.redirect(new URL('/manager/loyalty?configError=1',req.url),303);customerDesign[key]=value;}else if(business.customerDesign[key])customerDesign[key]=business.customerDesign[key];}
+    for(const [key,min,max] of [['panelOpacity',0,1],['fontSize',12,22],['headingSize',18,42]] as const){if(f.has(key)){const value=Number(f.get(key));if(!Number.isFinite(value)||value<min||value>max)return NextResponse.redirect(new URL('/manager/loyalty?configError=1',req.url),303);customerDesign[key]=value;}else if(business.customerDesign[key]!==undefined)customerDesign[key]=business.customerDesign[key];}
+    for(const key of ['fontFamily','fontStyle','fontWeight'] as const){const value=f.has(key)?String(f.get(key)):business.customerDesign[key];if(value!==undefined){const allowed={fontFamily:['sans','serif','rounded'],fontStyle:['normal','italic'],fontWeight:['400','600','700']};if(!allowed[key].includes(value))return NextResponse.redirect(new URL('/manager/loyalty?configError=1',req.url),303);Object.assign(customerDesign,{[key]:value});}}
+  }
   let logoUrl:string|null=null,stampUrl:string|null=null;
   try{
     const background=f.get('background');

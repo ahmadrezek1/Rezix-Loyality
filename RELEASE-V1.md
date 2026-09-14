@@ -90,3 +90,10 @@ See README.md and .env.example. Local inspection found Resend and Supabase Stora
 - Added migrations for trusted PIN devices and normalization of legacy free trials to three days. Applied to the configured database, including the two legacy 14-day trials. Paid subscriptions are excluded. Admin trial display shows 1/3, 2/3, 3/3 and expiry.
 - Added public contact footer with office@rezix.at, service descriptions, account links and legal links.
 - No test accounts, PIN devices or outbound emails were created by validation. PIN and mail tests are isolated mocks; an actual trusted-device enrollment requires the account owner's password.
+
+## Transparent customer card and typography
+
+- Kunden-Seite Design now includes card-surface opacity, heading/body/secondary colors, three system-font styles, normal/italic, font weight and separate body/heading sizes.
+- Shared CSS variables apply to the manager live preview and customer registration/card page. Image backgrounds default to transparent surfaces; saved opacity remains adjustable. QR retains its white scan surface.
+- Values are validated by the existing design-save endpoint and stored in customer_design JSONB; no migration or existing customer-data write required.
+- TypeScript and existing test suite passed; focused design tests also cover typography persistence and rejection of invalid values. No real account settings were changed during validation.
