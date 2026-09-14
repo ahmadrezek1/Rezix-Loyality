@@ -52,3 +52,32 @@ See README.md and .env.example. Local inspection found Resend and Supabase Stora
 - Legal pages still identify themselves as drafts; actual company details and final contractual text must be supplied before commercial launch.
 - Website has not been deployed by this task. Review code and deploy together with the matching schema.
 - Existing localStorage customers must verify email once after upgrade. Previous stamps and rewards are retained.
+
+## Final validation results
+
+- Production build passed, including TypeScript validation and generation of 44 static pages.
+- All 20 automated tests passed. Security, loyalty transactions and webhook handling use isolated mocks; this is not a live service or real-device end-to-end test.
+- Dependency audit reported zero known vulnerabilities during this validation.
+- Public home, salon registration, manager login and PWA assets returned successfully. Protected workspace routes redirected unauthenticated visitors to login; customer API returned 401 with private/no-store caching.
+- Salon registration visually checked on desktop and at a 390-pixel mobile viewport. Fixed checkbox alignment and associated name/email/OTP labels with their inputs.
+- Card configuration now rechecks salon entitlement under a database row lock at save time, preventing a save after suspension during an upload. Added a regression test.
+- No deployment, live Stripe activation, outbound email or test customer creation was performed. The release gates above still apply.
+
+## Marketing and customer-page design update
+
+- Public landing removes Manager/Friseur entry links, uses the supplied rabbit only in the marketing hero, and adds lightweight CSS motion with reduced-motion support.
+- Customer registration and existing salon-creation UI gain entrance/CTA/success animations; submission/authentication behavior is unchanged.
+- Manager > Karten & Belohnungen contains the new Kunden-Seite Design section with a live background preview: color, gradient, image, white overlay, position and size. Existing card/reward controls remain.
+- Minimal migration `db/migrate-customer-design-v101.sql` adds only `businesses.customer_design` JSONB. Applied to the configured database. Deployments must run `npm run db:migrate` before using background saving.
+- Existing Storage upload validates PNG/JPEG/WebP up to 2 MiB and now accepts a salon-scoped background asset path. Actual upload remains untested locally because Storage credentials are absent.
+- Explainer modal supports Escape, close button, outside click, focus return and scroll locking. Missing video shows a clean fallback. Add `public/media/rezix-explainer.mp4` or configure `NEXT_PUBLIC_REZIX_EXPLAINER_VIDEO` and rebuild. Production outline is in `public/media/README.md`; no actual video has been generated.
+- Production build and all 24 automated tests passed. Browser checks covered the marketing page and video fallback/close controls on desktop and a 390px mobile viewport. Authenticated Manager UI and real uploads still require manual acceptance testing with a real account.
+- No changes to authentication, QR scanning, redemption algorithms, billing, Stripe, trial limits or role rules in this update. The customer response includes only the additional public design settings.
+
+## Public manager registration and marketing refinement
+
+- Public header and CTAs now provide Login and Registrieren for managers. Registration creates a salon and manager through the existing transactional store function, so the salon appears in the existing Admin salon list. No customer records or elevated roles are created by this endpoint.
+- New manager signup uses a six-digit email verification code instead of a link, valid for 10 minutes, with five attempts, one-time consumption, hashed codes bound to random challenge IDs, rate limits and resend. The existing manager login still requires a verified email and password; existing login/session/reward/Stripe logic is unchanged.
+- Migration `migrate-manager-verification-v102.sql` adds the separate challenge table and was applied. Deployment must run migrations first. This update does not change existing salon trial end dates; new salons continue to receive exactly 3 days through the existing creation logic.
+- Marketing hero uses the generated transparent head-and-paws rabbit asset over the actual HTML loyalty card. Added workflow, manager/customization descriptions and a 3-day trial CTA, with responsive styles and reduced-motion support.
+- All 30 isolated automated tests passed, including registration validation, email delivery failure, code expiry, maximum attempts and replay protection. Real email delivery and an actual account registration were not exercised locally; no test salon/customer was inserted.

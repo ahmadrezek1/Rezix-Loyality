@@ -14,7 +14,7 @@ function fixture({stamps=0,ready=true,staff=true}={}){
   throw Error('Unexpected SQL: '+sql);
  };
  tag.json=x=>x;tag.begin=async fn=>fn(tag);
- const store=load('lib/store.ts',{postgres:()=>tag,'./billing':{billingOperational:b=>b.active,friseurLimitFor:()=>1}});
+ const store=load('lib/store.ts',{'./customer-design':load('lib/customer-design.ts'),postgres:()=>tag,'./billing':{billingOperational:b=>b.active,friseurLimitFor:()=>1}});
  return {act:(key,op='stamp',code='RZX-ABCDEF12',salon='test_salon')=>store.loyaltyOperation(code,'test_staff',salon,key,op),state:()=>({customer,visits,audits})};
 }
 test('stamp retry with the same key is applied once',async()=>{const f=fixture();const a=await f.act('request-one');const b=await f.act('request-one');assert.equal(a.kind,'ok');assert.equal(b.response.customer.stamps,1);assert.equal(f.state().visits,1);assert.equal(f.state().audits,1)});
@@ -23,3 +23,10 @@ test('reward resets the card and increments redeemed count once',async()=>{const
 test('request key cannot be reused for a different action or customer',async()=>{const f=fixture();await f.act('one');assert.equal((await f.act('one','redeem')).kind,'conflict');assert.equal((await f.act('one','stamp','RZX-00000000')).kind,'conflict');assert.equal(f.state().visits,1)});
 test('cross-salon requests and disabled staff cannot change loyalty',async()=>{const f=fixture();assert.equal((await f.act('one','stamp','RZX-ABCDEF12','another_salon')).kind,'blocked');assert.equal(f.state().visits,0);const disabled=fixture({staff:false});assert.equal((await disabled.act('one')).kind,'blocked')});
 test('inactive salon and unearned rewards do not mutate',async()=>{const f=fixture({ready:false});assert.equal((await f.act('one')).kind,'blocked');assert.equal(f.state().visits,0);const early=fixture();assert.equal((await early.act('one','redeem')).kind,'not-ready')});
+
+test('card settings are rejected when the salon becomes inactive before saving',async()=>{
+ let writes=0;
+ const tag=async(strings)=>{const sql=strings.join('?');if(sql.includes('select * from businesses'))return [{active:false}];if(sql.startsWith('update businesses')){writes++;return [];}throw Error(sql);};tag.begin=async fn=>fn(tag);
+ const store=load('lib/store.ts',{'./customer-design':load('lib/customer-design.ts'),postgres:()=>tag,'./billing':{billingOperational:b=>b.active,friseurLimitFor:()=>1}});
+ await assert.rejects(()=>store.updateBusinessCardConfig({businessId:'salon',rewardTarget:5}),/Tarif nicht aktiv/);assert.equal(writes,0);
+});

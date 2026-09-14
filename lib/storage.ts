@@ -6,7 +6,7 @@ export async function uploadSalonAsset(file:File,path:string){
  if(!file||file.size===0)return null;
  if(file.size>2*1024*1024)throw new Error('Datei ist größer als 2 MB');
  const extensions:Record<string,string>={'image/png':'png','image/jpeg':'jpg','image/webp':'webp'};
- const ext=extensions[file.type];if(!ext||! /^[a-z0-9-]+\/(logo|stamp)$/.test(path))throw new Error('Ungültiges Bildformat oder Pfad');
+ const ext=extensions[file.type];if(!ext||! /^[a-z0-9-]+\/(logo|stamp|background)$/.test(path))throw new Error('Ungültiges Bildformat oder Pfad');
  const bytes=Buffer.from(await file.arrayBuffer());
  const valid=file.type==='image/png'?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):file.type==='image/jpeg'?bytes.length>3&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255:bytes.subarray(0,4).toString()==='RIFF'&&bytes.subarray(8,12).toString()==='WEBP';
  if(!valid)throw new Error('Dateiinhalt passt nicht zum Bildformat');

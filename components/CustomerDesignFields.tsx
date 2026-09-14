@@ -1,0 +1,16 @@
+ 'use client';
+import { useEffect,useState,useRef } from 'react';
+import type { CustomerDesign } from '@/lib/customer-design';
+export default function CustomerDesignFields({design,onChange}:{design:CustomerDesign;onChange:(d:CustomerDesign)=>void}){
+ const originalImage=useRef(design.imageUrl);const [removed,setRemoved]=useState(false);
+ const [file,setFile]=useState<File|null>(null);
+ useEffect(()=>{const url=file?URL.createObjectURL(file):null;onChange({...design,imageUrl:removed?null:url||originalImage.current,...(file&&!removed?{mode:'image' as const}:{})});return()=>{if(url)URL.revokeObjectURL(url);};},[file,removed]);
+ const update=(patch:Partial<CustomerDesign>)=>onChange({...design,...patch});
+ return <fieldset className="customer-design-fields"><legend>Kunden-Seite Design</legend><p className="muted">Gestalte den Hintergrund der Registrierung und der digitalen Kundenkarte. PNG, JPG oder WEBP bis 2 MB.</p>
+ <label htmlFor="background-mode">Hintergrund</label><select id="background-mode" name="backgroundMode" value={design.mode} onChange={e=>update({mode:e.target.value as CustomerDesign['mode']})}><option value="color">Einfarbig</option><option value="gradient">Farbverlauf</option><option value="image">Bild</option></select>
+ <div className="form-split"><div><label htmlFor="background-color">Hintergrundfarbe</label><input id="background-color" name="backgroundColor" type="color" value={design.color} onChange={e=>update({color:e.target.value})}/></div><div><label htmlFor="gradient-color">Verlaufsfarbe</label><input id="gradient-color" name="gradientColor" type="color" value={design.gradientColor} onChange={e=>update({gradientColor:e.target.value})}/></div></div>
+ <label htmlFor="background-file">Hintergrundbild</label><input id="background-file" name="background" type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>{const f=e.target.files?.[0];if(f&&f.size>2097152){e.target.setCustomValidity('Bitte ein Bild bis 2 MB wählen.');e.target.reportValidity();return;}e.target.setCustomValidity('');setFile(f||null);}}/>
+ <label className="checkline"><input type="checkbox" name="removeBackground" checked={removed} onChange={e=>setRemoved(e.target.checked)}/> Gespeichertes Hintergrundbild entfernen</label>
+ <label htmlFor="background-overlay">Weiße Überlagerung · {Math.round(design.overlay*100)} %</label><input id="background-overlay" name="backgroundOverlay" type="range" min="0" max="1" step="0.05" value={design.overlay} onChange={e=>update({overlay:Number(e.target.value)})}/>
+ <div className="form-split"><div><label htmlFor="background-position">Bildposition</label><select id="background-position" name="backgroundPosition" value={design.position} onChange={e=>update({position:e.target.value as CustomerDesign['position']})}><option value="center">Mitte</option><option value="top">Oben</option><option value="bottom">Unten</option></select></div><div><label htmlFor="background-size">Bildgröße</label><select id="background-size" name="backgroundSize" value={design.size} onChange={e=>update({size:e.target.value as CustomerDesign['size']})}><option value="cover">Ausfüllen (cover)</option><option value="contain">Vollständig (contain)</option></select></div></div></fieldset>;
+}
