@@ -91,6 +91,8 @@ export async function GET(
 
         card_subtitle:
           row.card_subtitle ?? null,
+        customer_design:
+         row.customer_design ?? null,  
       }
     );
 

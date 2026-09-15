@@ -28,6 +28,16 @@ type WalletBusiness = {
 
   card_title?: string | null;
   card_subtitle?: string | null;
+
+  customer_design?: {
+    mode?: 'color' | 'gradient' | 'image';
+    color?: string;
+    gradientColor?: string;
+    imageUrl?: string | null;
+    overlay?: number;
+    position?: 'center' | 'top' | 'bottom';
+    size?: 'cover' | 'contain';
+  } | null;
 };
 
 export function appleWalletConfigured() {
@@ -202,6 +212,32 @@ export async function createApplePass(
       );
     }
   }
+  const backgroundImageUrl =
+  business.customer_design?.mode === 'image'
+    ? business.customer_design.imageUrl
+    : null;
+
+const backgroundImage =
+  await downloadImage(backgroundImageUrl);
+
+if (backgroundImage) {
+  try {
+    pass.addBuffer(
+      'strip.png',
+      backgroundImage
+    );
+
+    pass.addBuffer(
+      'strip@2x.png',
+      backgroundImage
+    );
+  } catch (error) {
+    console.error(
+      'Apple Wallet custom background failed.',
+      error
+    );
+  }
+}
 
   /*
    * Hauptanzeige: Stempelstand

@@ -67,6 +67,7 @@ export async function getApplePassCustomer(
       b.stamp_url,
       b.card_title,
       b.card_subtitle
+      b.customer_design
 
     from customers c
 

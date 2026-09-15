@@ -65,6 +65,7 @@ export async function GET(req: Request) {
         stamp_url: b.stampUrl,
         card_title: b.cardTitle,
         card_subtitle: b.cardSubtitle,
+        customer_design: b.customerDesign,
       }
     );
 
