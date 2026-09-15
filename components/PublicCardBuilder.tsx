@@ -1,0 +1,15 @@
+'use client';
+import {useEffect,useState} from 'react';
+import Link from 'next/link';
+import {ArrowRight,Check} from 'lucide-react';
+import {CARD_TEMPLATES,CARD_DRAFT_KEY,parseCardDraft,type CardDraft} from '@/lib/card-templates';
+import LoyaltyCardPreview from './LoyaltyCardPreview';
+export default function PublicCardBuilder(){
+ const initial=CARD_TEMPLATES[0];
+ const [draft,setDraft]=useState<CardDraft>({templateId:initial.id,name:'',title:initial.title,reward:initial.reward,target:initial.target});
+ const [ready,setReady]=useState(false);
+ useEffect(()=>{try{const saved=parseCardDraft(sessionStorage.getItem(CARD_DRAFT_KEY));if(saved)setDraft(saved);}catch{}setReady(true);},[]);
+ useEffect(()=>{if(ready)try{sessionStorage.setItem(CARD_DRAFT_KEY,JSON.stringify(draft));}catch{}},[ready,draft]);
+ const template=CARD_TEMPLATES.find(t=>t.id===draft.templateId)||initial;
+ return <section className="public-card-builder" id="karten-builder"><div className="marketing-section-intro"><span className="eyebrow">DEIN PROGRAMM BEGINNT MIT EINER KARTE</span><h2>Ausprobieren. Gestalten. Loslegen.</h2><p>Wähle deine Vorlage und sieh direkt, wie deine Kundenkarte aussieht.</p></div><div className="builder-layout"><div className="builder-controls"><span className="section-kicker">01 / VORLAGE WÄHLEN</span><div className="template-grid">{CARD_TEMPLATES.map(t=><button key={t.id} type="button" className={`template-option ${draft.templateId===t.id?'selected':''}`} aria-pressed={draft.templateId===t.id} onClick={()=>setDraft({...draft,templateId:t.id,title:t.title,reward:t.reward,target:t.target})}><span className="template-swatch" style={{background:t.design.color,borderColor:t.color,color:t.color}}><Check size={17}/></span>{t.label}</button>)}</div><div className="stack-form"><span className="section-kicker">02 / DEINE KARTE ANPASSEN</span><label htmlFor="builder-name">Betriebsname</label><input id="builder-name" value={draft.name} maxLength={120} placeholder="Dein Betrieb" onChange={e=>setDraft({...draft,name:e.target.value})}/><label htmlFor="builder-title">Kartentitel</label><input id="builder-title" value={draft.title} maxLength={80} onChange={e=>setDraft({...draft,title:e.target.value})}/><label htmlFor="builder-reward">Deine Belohnung</label><input id="builder-reward" value={draft.reward} maxLength={160} onChange={e=>setDraft({...draft,reward:e.target.value})}/><label htmlFor="builder-target">Stempel bis zur Belohnung · {draft.target}</label><input id="builder-target" type="range" min={2} max={30} value={draft.target} onChange={e=>setDraft({...draft,target:Number(e.target.value)})}/><Link className="gold" href="/manager/register?draft=1">Mit dieser Karte starten <ArrowRight size={17}/></Link><small className="muted">Deine Auswahl wird in die Registrierung übernommen. 3 Tage kostenlos testen.</small></div></div><LoyaltyCardPreview name={draft.name} title={draft.title} subtitle={template.subtitle} reward={draft.reward} target={draft.target} color={template.color} design={template.design}/></div></section>;
+}

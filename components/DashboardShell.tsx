@@ -15,7 +15,7 @@ const managerItems=[
  {href:'/manager',label:'Übersicht',icon:Home},
  {href:'/manager/customers',label:'Kunden',icon:Users},
  {href:'/manager/friseure',label:'Mitarbeiter',icon:Scissors},
- {href:'/manager/loyalty',label:'Karten & Belohnungen',icon:Gift},
+ {href:'/manager/loyalty',label:'Treueprogramm',icon:Gift},
  {href:'/manager/billing',label:'Tarif & Abrechnung',icon:CreditCard},
  {href:'/manager/settings',label:'Einstellungen',icon:Settings},
 ];
@@ -49,7 +49,7 @@ export default function DashboardShell({role,name,businessName,logoUrl,children}
   <div className="dashboard-main">
    <header className="dashboard-header">
     <div className="mobile-brand"><img src="/rezix-logo.svg" alt="Rezix"/><b>{businessName||'Rezix Loyalty'}</b></div>
-    <div className="header-breadcrumb">Workspace <span>/</span> <b>{items.find(item=>activeHref(item.href))?.label}</b></div><div className="header-spacer"/><form className="mobile-logout" method="post" action="/api/logout"><button className="secondary" aria-label="Abmelden"><LogOut size={18}/></button></form>
+    <div className="header-breadcrumb">{businessName||'Rezix Loyalty'} <span>/</span> <b>{items.find(item=>activeHref(item.href))?.label}</b></div><div className="header-spacer"/><form className="mobile-logout" method="post" action="/api/logout"><button className="secondary" aria-label="Abmelden"><LogOut size={18}/></button></form>
     <div className="header-role"><div className="sidebar-avatar small">{(name||role).slice(0,1).toUpperCase()}</div><div><b>{name||role}</b><span>{role==='admin'?'Admin':role==='manager'?'Manager':'Mitarbeiter'}</span></div></div>
    </header>
    <main className="dashboard-content">{children}</main>
