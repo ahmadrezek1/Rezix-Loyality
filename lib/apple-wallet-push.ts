@@ -129,6 +129,13 @@ async function sendPushToken(
   });
 }
 
+/*
+ * تحديث بطاقة عميل واحد.
+ *
+ * يُستخدم بعد:
+ * - إضافة ختم
+ * - استبدال المكافأة
+ */
 export async function pushAppleWalletUpdate(
   customerId: string
 ) {
@@ -153,6 +160,58 @@ export async function pushAppleWalletUpdate(
     if (result.status === 'rejected') {
       console.error(
         'Apple Wallet APNs push failed.',
+        result.reason
+      );
+    }
+  }
+}
+
+/*
+ * تحديث جميع بطاقات Apple Wallet
+ * التابعة لـ Unternehmer واحد.
+ *
+ * يُستخدم بعد تغيير تصميم البطاقة.
+ */
+export async function pushAppleWalletBusinessUpdate(
+  businessId: string
+) {
+  if (!applePushConfigured()) {
+    return;
+  }
+
+  const rows = await db()`
+    select distinct awr.push_token
+    from apple_wallet_registrations awr
+
+    join customers c
+      on c.id = awr.customer_id
+
+    where c.business_id = ${businessId}
+      and c.active = true
+      and awr.pass_type_identifier =
+        ${process.env.APPLE_PASS_TYPE_IDENTIFIER || ''}
+  `;
+
+  const tokens = Array.from(rows)
+    .map((row: any) =>
+      String(row.push_token || '').trim()
+    )
+    .filter(Boolean);
+
+  if (!tokens.length) {
+    return;
+  }
+
+  const results = await Promise.allSettled(
+    tokens.map((token) =>
+      sendPushToken(token)
+    )
+  );
+
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      console.error(
+        'Apple Wallet business design push failed.',
         result.reason
       );
     }

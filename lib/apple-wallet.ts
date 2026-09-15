@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { PKPass } from 'passkit-generator';
+
 import {
   hexToRgbString,
   pemFromEnv,
@@ -16,9 +17,17 @@ type WalletCustomer = {
 type WalletBusiness = {
   id: string;
   name: string;
+
   reward_target: number;
   reward_text: string;
+
   primary_color?: string | null;
+
+  logo_url?: string | null;
+  stamp_url?: string | null;
+
+  card_title?: string | null;
+  card_subtitle?: string | null;
 };
 
 export function appleWalletConfigured() {
@@ -31,12 +40,55 @@ export function appleWalletConfigured() {
   );
 }
 
+async function downloadImage(
+  url: string | null | undefined
+): Promise<Buffer | null> {
+  if (!url) return null;
+
+  try {
+    const response = await fetch(url, {
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const contentType =
+      response.headers.get('content-type') || '';
+
+    if (!contentType.startsWith('image/')) {
+      return null;
+    }
+
+    const data = await response.arrayBuffer();
+
+    /*
+     * Schutz vor versehentlich riesigen Bildern.
+     */
+    if (data.byteLength > 5 * 1024 * 1024) {
+      return null;
+    }
+
+    return Buffer.from(data);
+  } catch (error) {
+    console.error(
+      'Apple Wallet image download failed.',
+      error
+    );
+
+    return null;
+  }
+}
+
 export async function createApplePass(
   customer: WalletCustomer,
   business: WalletBusiness
 ) {
   if (!appleWalletConfigured()) {
-    throw new Error('Apple Wallet not configured');
+    throw new Error(
+      'Apple Wallet not configured'
+    );
   }
 
   const passTypeIdentifier =
@@ -62,14 +114,18 @@ export async function createApplePass(
         ),
 
         signerKey: Buffer.from(
-          pemFromEnv('APPLE_PASS_PRIVATE_KEY')!
+          pemFromEnv(
+            'APPLE_PASS_PRIVATE_KEY'
+          )!
         ),
 
         signerKeyPassphrase:
-          process.env.APPLE_PASS_PRIVATE_KEY_PASSPHRASE ||
+          process.env
+            .APPLE_PASS_PRIVATE_KEY_PASSPHRASE ||
           undefined,
       },
     },
+
     {
       passTypeIdentifier,
       teamIdentifier,
@@ -79,33 +135,77 @@ export async function createApplePass(
       organizationName: business.name,
 
       description:
+        business.card_subtitle ||
         `${business.name} Treuekarte`,
 
-      logoText: business.name,
+      logoText:
+        business.card_title ||
+        business.name,
 
-      backgroundColor: hexToRgbString(
-        business.primary_color
-      ),
+      backgroundColor:
+        hexToRgbString(
+          business.primary_color
+        ),
 
-      foregroundColor: 'rgb(255,255,255)',
+      foregroundColor:
+        'rgb(255,255,255)',
 
-      labelColor: 'rgb(255,255,255)',
+      labelColor:
+        'rgb(255,255,255)',
 
-      // Apple Wallet ruft später diesen Rezix-Endpunkt
-      // für Registrierungen und Pass-Updates auf.
+      authenticationToken:
+        stableWalletToken(
+          'apple',
+          business.id,
+          customer.id
+        ),
+
+      /*
+       * Dadurch registriert sich Wallet bei unserem
+       * bereits gebauten Rezix Web Service.
+       */
       webServiceURL:
-        'https://loyality.rezix.at/api/wallet/apple',
-
-      authenticationToken: stableWalletToken(
-        'apple',
-        business.id,
-        customer.id
-      ),
+        `${
+          process.env.NEXT_PUBLIC_APP_URL ||
+          'https://loyality.rezix.at'
+        }/api/wallet/apple/v1`,
     }
   );
 
   pass.type = 'storeCard';
 
+  /*
+   * Unternehmer-Logo laden.
+   *
+   * Falls kein eigenes Logo vorhanden ist,
+   * bleiben die Bilder aus apple-model.pass aktiv.
+   */
+  const logo = await downloadImage(
+    business.logo_url
+  );
+
+  if (logo) {
+    try {
+      pass.addBuffer(
+        'logo.png',
+        logo
+      );
+
+      pass.addBuffer(
+        'logo@2x.png',
+        logo
+      );
+    } catch (error) {
+      console.error(
+        'Apple Wallet custom logo failed.',
+        error
+      );
+    }
+  }
+
+  /*
+   * Hauptanzeige: Stempelstand
+   */
   pass.primaryFields.push({
     key: 'stamps',
     label: 'STEMPEL',
@@ -113,24 +213,57 @@ export async function createApplePass(
       `${customer.stamps} / ${business.reward_target}`,
   });
 
+  /*
+   * Belohnung
+   */
   pass.secondaryFields.push({
     key: 'reward',
     label: 'BELOHNUNG',
     value: business.reward_text,
   });
 
+  /*
+   * Mitglied
+   */
   pass.auxiliaryFields.push({
     key: 'member',
     label: 'MITGLIED',
     value: customer.name,
   });
 
+  /*
+   * Rückseite
+   */
+  if (business.card_subtitle) {
+    pass.backFields.push({
+      key: 'subtitle',
+      label: 'TREUEPROGRAMM',
+      value: business.card_subtitle,
+    });
+  }
+
+  pass.backFields.push({
+    key: 'rewardDetails',
+    label: 'BELOHNUNG',
+    value: business.reward_text,
+  });
+
+  pass.backFields.push({
+    key: 'progress',
+    label: 'FORTSCHRITT',
+    value:
+      `${customer.stamps} von ${business.reward_target} Stempeln`,
+  });
+
   pass.backFields.push({
     key: 'code',
-    label: 'Kundencode',
+    label: 'KUNDENCODE',
     value: customer.code,
   });
 
+  /*
+   * QR-Code
+   */
   pass.setBarcodes({
     format: 'PKBarcodeFormatQR',
     message: customer.code,

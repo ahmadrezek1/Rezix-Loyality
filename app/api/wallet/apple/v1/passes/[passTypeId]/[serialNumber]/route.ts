@@ -70,12 +70,27 @@ export async function GET(
       {
         id: row.business_id,
         name: row.business_name,
+
         reward_target: Number(
           row.reward_target
         ),
+
         reward_text: row.reward_text,
+
         primary_color:
           row.primary_color ?? null,
+
+        logo_url:
+          row.logo_url ?? null,
+
+        stamp_url:
+          row.stamp_url ?? null,
+
+        card_title:
+          row.card_title ?? null,
+
+        card_subtitle:
+          row.card_subtitle ?? null,
       }
     );
 

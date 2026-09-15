@@ -62,7 +62,11 @@ export async function getApplePassCustomer(
       b.name as business_name,
       b.reward_target,
       b.reward_text,
-      b.primary_color
+      b.primary_color,
+      b.logo_url,
+      b.stamp_url,
+      b.card_title,
+      b.card_subtitle
 
     from customers c
 
