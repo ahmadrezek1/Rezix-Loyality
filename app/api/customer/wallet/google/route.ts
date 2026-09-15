@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getBusinessBySlug } from '@/lib/store';
 import { customerSession } from '@/lib/customer-session';
-import { createGoogleWalletLink,googleWalletAvailable } from '@/lib/google-wallet';
+import { googleSaveUrl,googleWalletConfigured } from '@/lib/google-wallet';
 export const runtime='nodejs';
-export const dynamic='force-dynamic';
-const headers={'Cache-Control':'private, no-store'};
 export async function GET(req:Request){
- const business=await getBusinessBySlug(new URL(req.url).searchParams.get('slug')||'');
- const customer=business?await customerSession(business.id):null;
- if(!business||!customer)return NextResponse.json({error:'Bitte melde dich erneut bei deiner Kundenkarte an.'},{status:401,headers});
- if(!googleWalletAvailable())return NextResponse.json({error:'Google Wallet wird vorbereitet und ist noch nicht freigeschaltet.'},{status:503,headers});
- try{return NextResponse.json({url:createGoogleWalletLink(business,{id:customer.id,name:customer.name,code:customer.code})},{headers});}
- catch{return NextResponse.json({error:'Die Wallet-Karte konnte nicht erstellt werden. Bitte versuche es später erneut.'},{status:503,headers});}
+ try{
+  const u=new URL(req.url),slug=u.searchParams.get('slug')||'';const b=await getBusinessBySlug(slug);if(!b)return NextResponse.json({error:'Betrieb nicht gefunden.'},{status:404});
+  const c=await customerSession(b.id);if(!c)return NextResponse.json({error:'Nicht angemeldet.'},{status:401});if(!googleWalletConfigured())return NextResponse.json({error:'Google Wallet ist noch nicht konfiguriert.'},{status:503});
+  const origin=process.env.NEXT_PUBLIC_APP_URL||u.origin;const url=await googleSaveUrl({id:c.id,code:c.code,name:c.name,stamps:c.stamps,rewards_redeemed:c.rewards_redeemed},{id:b.id,name:b.name,reward_target:b.rewardTarget,reward_text:b.rewardText,primary_color:b.primaryColor,logo_url:b.logoUrl},origin);
+  return NextResponse.redirect(url,302);
+ }catch(e){console.error('google wallet',e);return NextResponse.json({error:'Google Wallet Karte konnte nicht erstellt werden.'},{status:500});}
 }

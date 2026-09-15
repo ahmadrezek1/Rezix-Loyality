@@ -10,7 +10,7 @@ export async function POST(req:Request){
  const f=await req.formData();const email=String(f.get('email')||'').trim().toLowerCase();const password=String(f.get('password')||'');
  if(await isBlocked('manager-login',email||'unknown',req))return NextResponse.redirect(new URL('/manager/login?blocked=1',req.url),303);
  const u=await getStaffByEmail(email);
- if(!u||u.role!=='manager'||!await verifyPassword(password,u.passwordSalt,u.passwordHash)){
+ if(!u||u.role!=='manager'||!verifyPassword(password,u.passwordSalt,u.passwordHash)){
    await recordAuthFailure('manager-login',email||'unknown',req);await audit({actorType:'manager',actorId:u?.id||email||null,businessId:u?.businessId||null,action:'auth.login.failed',req,metadata:{scope:'manager'}}).catch(()=>{});return NextResponse.redirect(new URL('/manager/login?error=1',req.url),303)
  }
  if(!u.emailVerifiedAt)return NextResponse.redirect(new URL('/manager/login?verify=1',req.url),303);

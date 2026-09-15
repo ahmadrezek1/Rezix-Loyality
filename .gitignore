@@ -4,8 +4,3 @@ node_modules
 .env.local
 .env.*.local
 tsconfig.tsbuildinfo
-*.pfx
-*.p12
-*.key
-*.pem
-wallet-secrets/

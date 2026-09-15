@@ -1,0 +1,14 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "PASS_TYPE_IDENTIFIER",
+  "serialNumber": "SERIAL_NUMBER",
+  "teamIdentifier": "TEAM_IDENTIFIER",
+  "organizationName": "Rezix",
+  "description": "Rezix Loyalty Card",
+  "logoText": "Rezix",
+  "foregroundColor": "rgb(255,255,255)",
+  "backgroundColor": "rgb(20,32,64)",
+  "labelColor": "rgb(255,255,255)",
+  "barcode": {"format":"PKBarcodeFormatQR","message":"CUSTOMER_CODE","messageEncoding":"iso-8859-1"},
+  "storeCard": {"primaryFields":[],"secondaryFields":[],"auxiliaryFields":[],"backFields":[]}
+}

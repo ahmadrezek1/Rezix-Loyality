@@ -1,4 +1,5 @@
-import { NextResponse, after } from 'next/server';
+import { NextResponse } from 'next/server';
+import * as NextServer from 'next/server';
 import { businessSlugExists,staffEmailExists,createBusinessWithManager } from '@/lib/store';
 import { consumeRateLimit,requestIp,sameOrigin,escapeHtml,audit } from '@/lib/security';
 import { issueManagerCode } from '@/lib/manager-verification';
@@ -42,15 +43,21 @@ export async function POST(req:Request){
   const challenge=await issueManagerCode(created.managerId);
   const redirectUrl='/manager/verify?challenge='+challenge.challengeId;
 
-  // Email delivery and audit logging must not keep the registration screen waiting.
-  after(async()=>{
+  const finishRegistration=async()=>{
    let emailSent=false;
    try{emailSent=await sendAuthEmail({to:managerEmail,subject:'Rezix – Dein Bestätigungscode',html:`<h2>Willkommen bei Rezix</h2><p>Dein Bestätigungscode für <b>${escapeHtml(name)}</b>:</p><p style="font-size:32px;letter-spacing:6px"><b>${challenge.code}</b></p><p>Der Code ist 10 Minuten gültig. Gib ihn auf der Rezix-Webseite ein.</p>`});}catch{}
    await audit({businessId:created.businessId,action:'business.registered',targetType:'business',targetId:created.businessId,req,metadata:{termsAccepted:true,emailSent}}).catch(()=>{});
-  });
+   return emailSent;
+  };
+  // Next.js can finish non-critical work after the response. Tests and other runtimes
+  // without `after` fall back to awaiting it, so registration never crashes.
+  const afterFn=(NextServer as any).after as undefined|((fn:()=>Promise<void>)=>void);
+  let mailError=false;
+  if(typeof afterFn==='function')afterFn(async()=>{await finishRegistration();});
+  else mailError=!(await finishRegistration());
 
-  if(wantsJson(req))return NextResponse.json({ok:true,redirect:redirectUrl});
-  return NextResponse.redirect(new URL(redirectUrl,req.url),303);
+  if(wantsJson(req))return NextResponse.json({ok:true,redirect:redirectUrl+(mailError?'&mailError=1':'')});
+  return NextResponse.redirect(new URL(redirectUrl+(mailError?'&mailError=1':''),req.url),303);
  }catch(err:any){
   console.error('manager registration failed',err);
   if(err?.code==='23505'){
