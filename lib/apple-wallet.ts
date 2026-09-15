@@ -1,4 +1,5 @@
 import path from 'node:path';
+import sharp from 'sharp';
 import { PKPass } from 'passkit-generator';
 
 import {
@@ -31,12 +32,22 @@ type WalletBusiness = {
 
   customer_design?: {
     mode?: 'color' | 'gradient' | 'image';
+
     color?: string;
     gradientColor?: string;
+
     imageUrl?: string | null;
+
     overlay?: number;
-    position?: 'center' | 'top' | 'bottom';
-    size?: 'cover' | 'contain';
+
+    position?:
+      | 'center'
+      | 'top'
+      | 'bottom';
+
+    size?:
+      | 'cover'
+      | 'contain';
   } | null;
 };
 
@@ -50,10 +61,21 @@ export function appleWalletConfigured() {
   );
 }
 
+/*
+ * Lädt ein Bild aus dem Storage.
+ *
+ * Unterstützt z.B.:
+ * JPG
+ * JPEG
+ * PNG
+ * WebP
+ */
 async function downloadImage(
   url: string | null | undefined
 ): Promise<Buffer | null> {
-  if (!url) return null;
+  if (!url) {
+    return null;
+  }
 
   try {
     const response = await fetch(url, {
@@ -61,22 +83,49 @@ async function downloadImage(
     });
 
     if (!response.ok) {
+      console.error(
+        'Apple Wallet image download failed:',
+        response.status,
+        url
+      );
+
       return null;
     }
 
     const contentType =
-      response.headers.get('content-type') || '';
+      response.headers.get(
+        'content-type'
+      ) || '';
 
-    if (!contentType.startsWith('image/')) {
+    if (
+      !contentType.startsWith('image/')
+    ) {
+      console.error(
+        'Apple Wallet asset is not an image:',
+        contentType,
+        url
+      );
+
       return null;
     }
 
-    const data = await response.arrayBuffer();
+    const data =
+      await response.arrayBuffer();
 
     /*
-     * Schutz vor versehentlich riesigen Bildern.
+     * Schutz vor versehentlich sehr
+     * großen Dateien.
      */
-    if (data.byteLength > 5 * 1024 * 1024) {
+    if (
+      data.byteLength >
+      5 * 1024 * 1024
+    ) {
+      console.error(
+        'Apple Wallet image too large:',
+        data.byteLength,
+        url
+      );
+
       return null;
     }
 
@@ -91,6 +140,134 @@ async function downloadImage(
   }
 }
 
+/*
+ * Wandelt das Hintergrundbild in echte
+ * PNG-Dateien für Apple Wallet um.
+ *
+ * Dadurch können Unternehmer weiterhin
+ * JPG / PNG / WebP hochladen.
+ */
+async function createAppleStrip(
+  source: Buffer,
+  design:
+    | WalletBusiness['customer_design']
+    | undefined
+): Promise<{
+  normal: Buffer;
+  retina: Buffer;
+}> {
+  /*
+   * Position aus dem Rezix Designer
+   * auf Sharp übertragen.
+   */
+  const position =
+    design?.position === 'top'
+      ? 'north'
+      : design?.position === 'bottom'
+        ? 'south'
+        : 'centre';
+
+  /*
+   * cover / contain aus dem
+   * Rezix Designer übernehmen.
+   */
+  const fit:
+    | 'cover'
+    | 'contain' =
+    design?.size === 'contain'
+      ? 'contain'
+      : 'cover';
+
+  /*
+   * Falls contain verwendet wird,
+   * brauchen freie Bereiche eine Farbe.
+   */
+  const background =
+    design?.color &&
+    /^#[0-9a-f]{6}$/i.test(
+      design.color
+    )
+      ? design.color
+      : '#142040';
+
+  /*
+   * 1x
+   */
+  const normal =
+    await sharp(source)
+      .rotate()
+      .resize(375, 123, {
+        fit,
+        position,
+        background,
+      })
+      .png()
+      .toBuffer();
+
+  /*
+   * Retina / 2x
+   */
+  const retina =
+    await sharp(source)
+      .rotate()
+      .resize(750, 246, {
+        fit,
+        position,
+        background,
+      })
+      .png()
+      .toBuffer();
+
+  return {
+    normal,
+    retina,
+  };
+}
+
+/*
+ * Unternehmer-Logo ebenfalls in echtes
+ * PNG umwandeln.
+ *
+ * Dadurch funktioniert auch ein
+ * hochgeladenes JPG/WebP korrekt als
+ * logo.png.
+ */
+async function createAppleLogo(
+  source: Buffer
+): Promise<{
+  normal: Buffer;
+  retina: Buffer;
+}> {
+  const normal =
+    await sharp(source)
+      .rotate()
+      .resize({
+        width: 160,
+        height: 50,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .png()
+      .toBuffer();
+
+  const retina =
+    await sharp(source)
+      .rotate()
+      .resize({
+        width: 320,
+        height: 100,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .png()
+      .toBuffer();
+
+  return {
+    normal,
+    retina,
+  };
+}
+
 export async function createApplePass(
   customer: WalletCustomer,
   business: WalletBusiness
@@ -102,11 +279,15 @@ export async function createApplePass(
   }
 
   const passTypeIdentifier =
-    process.env.APPLE_PASS_TYPE_IDENTIFIER!;
+    process.env
+      .APPLE_PASS_TYPE_IDENTIFIER!;
 
   const teamIdentifier =
     process.env.APPLE_TEAM_IDENTIFIER!;
 
+  /*
+   * Basis-Pass aus unserem Model laden.
+   */
   const pass = await PKPass.from(
     {
       model: path.join(
@@ -116,11 +297,15 @@ export async function createApplePass(
 
       certificates: {
         wwdr: Buffer.from(
-          pemFromEnv('APPLE_WWDR_CERT')!
+          pemFromEnv(
+            'APPLE_WWDR_CERT'
+          )!
         ),
 
         signerCert: Buffer.from(
-          pemFromEnv('APPLE_PASS_CERT')!
+          pemFromEnv(
+            'APPLE_PASS_CERT'
+          )!
         ),
 
         signerKey: Buffer.from(
@@ -140,9 +325,15 @@ export async function createApplePass(
       passTypeIdentifier,
       teamIdentifier,
 
-      serialNumber: customer.id,
+      /*
+       * Ein Kunde = eine eindeutige
+       * Apple Wallet Karte.
+       */
+      serialNumber:
+        customer.id,
 
-      organizationName: business.name,
+      organizationName:
+        business.name,
 
       description:
         business.card_subtitle ||
@@ -152,6 +343,10 @@ export async function createApplePass(
         business.card_title ||
         business.name,
 
+      /*
+       * Grundfarbe bleibt als Fallback
+       * bestehen.
+       */
       backgroundColor:
         hexToRgbString(
           business.primary_color
@@ -163,6 +358,9 @@ export async function createApplePass(
       labelColor:
         'rgb(255,255,255)',
 
+      /*
+       * Apple Web Service Auth.
+       */
       authenticationToken:
         stableWalletToken(
           'apple',
@@ -171,12 +369,15 @@ export async function createApplePass(
         ),
 
       /*
-       * Dadurch registriert sich Wallet bei unserem
-       * bereits gebauten Rezix Web Service.
+       * Apple Wallet Web Service.
+       *
+       * Darüber lädt das iPhone nach
+       * einem APNs Push die neue Karte.
        */
       webServiceURL:
         `${
-          process.env.NEXT_PUBLIC_APP_URL ||
+          process.env
+            .NEXT_PUBLIC_APP_URL ||
           'https://loyality.rezix.at'
         }/api/wallet/apple/v1`,
     }
@@ -185,25 +386,31 @@ export async function createApplePass(
   pass.type = 'storeCard';
 
   /*
-   * Unternehmer-Logo laden.
-   *
-   * Falls kein eigenes Logo vorhanden ist,
-   * bleiben die Bilder aus apple-model.pass aktiv.
+   * =====================================
+   * UNTERNEHMER LOGO
+   * =====================================
    */
-  const logo = await downloadImage(
-    business.logo_url
-  );
 
-  if (logo) {
+  const downloadedLogo =
+    await downloadImage(
+      business.logo_url
+    );
+
+  if (downloadedLogo) {
     try {
+      const logo =
+        await createAppleLogo(
+          downloadedLogo
+        );
+
       pass.addBuffer(
         'logo.png',
-        logo
+        logo.normal
       );
 
       pass.addBuffer(
         'logo@2x.png',
-        logo
+        logo.retina
       );
     } catch (error) {
       console.error(
@@ -212,36 +419,68 @@ export async function createApplePass(
       );
     }
   }
-  const backgroundImageUrl =
-  business.customer_design?.mode === 'image'
-    ? business.customer_design.imageUrl
-    : null;
-
-const backgroundImage =
-  await downloadImage(backgroundImageUrl);
-
-if (backgroundImage) {
-  try {
-    pass.addBuffer(
-      'strip.png',
-      backgroundImage
-    );
-
-    pass.addBuffer(
-      'strip@2x.png',
-      backgroundImage
-    );
-  } catch (error) {
-    console.error(
-      'Apple Wallet custom background failed.',
-      error
-    );
-  }
-}
 
   /*
-   * Hauptanzeige: Stempelstand
+   * =====================================
+   * HINTERGRUNDBILD
+   * =====================================
+   *
+   * Apple Wallet verwendet bei einer
+   * storeCard kein CSS background-image.
+   *
+   * Das Bild wird deshalb als strip.png
+   * in den signierten Pass eingebaut.
    */
+
+  const backgroundImageUrl =
+    business.customer_design?.mode ===
+      'image'
+      ? business.customer_design
+          .imageUrl
+      : null;
+
+  const downloadedBackground =
+    await downloadImage(
+      backgroundImageUrl
+    );
+
+  if (downloadedBackground) {
+    try {
+      const strip =
+        await createAppleStrip(
+          downloadedBackground,
+          business.customer_design
+        );
+
+      pass.addBuffer(
+        'strip.png',
+        strip.normal
+      );
+
+      pass.addBuffer(
+        'strip@2x.png',
+        strip.retina
+      );
+    } catch (error) {
+      console.error(
+        'Apple Wallet custom background failed.',
+        error
+      );
+    }
+  }
+
+  /*
+   * =====================================
+   * STEMPELSTAND
+   * =====================================
+   *
+   * Lassen wir vorerst als 0 / 10,
+   * 1 / 10 usw.
+   *
+   * Das visuelle Design können wir
+   * anschließend separat verbessern.
+   */
+
   pass.primaryFields.push({
     key: 'stamps',
     label: 'STEMPEL',
@@ -250,38 +489,51 @@ if (backgroundImage) {
   });
 
   /*
-   * Belohnung
+   * =====================================
+   * BELOHNUNG
+   * =====================================
    */
+
   pass.secondaryFields.push({
     key: 'reward',
     label: 'BELOHNUNG',
-    value: business.reward_text,
+    value:
+      business.reward_text,
   });
 
   /*
-   * Mitglied
+   * =====================================
+   * MITGLIED
+   * =====================================
    */
+
   pass.auxiliaryFields.push({
     key: 'member',
     label: 'MITGLIED',
-    value: customer.name,
+    value:
+      customer.name,
   });
 
   /*
-   * Rückseite
+   * =====================================
+   * RÜCKSEITE
+   * =====================================
    */
+
   if (business.card_subtitle) {
     pass.backFields.push({
       key: 'subtitle',
       label: 'TREUEPROGRAMM',
-      value: business.card_subtitle,
+      value:
+        business.card_subtitle,
     });
   }
 
   pass.backFields.push({
     key: 'rewardDetails',
     label: 'BELOHNUNG',
-    value: business.reward_text,
+    value:
+      business.reward_text,
   });
 
   pass.backFields.push({
@@ -294,18 +546,33 @@ if (backgroundImage) {
   pass.backFields.push({
     key: 'code',
     label: 'KUNDENCODE',
-    value: customer.code,
+    value:
+      customer.code,
   });
 
   /*
-   * QR-Code
+   * =====================================
+   * QR CODE
+   * =====================================
    */
+
   pass.setBarcodes({
-    format: 'PKBarcodeFormatQR',
-    message: customer.code,
-    messageEncoding: 'iso-8859-1',
-    altText: customer.code,
+    format:
+      'PKBarcodeFormatQR',
+
+    message:
+      customer.code,
+
+    messageEncoding:
+      'iso-8859-1',
+
+    altText:
+      customer.code,
   });
 
+  /*
+   * Pass signieren und als .pkpass
+   * zurückgeben.
+   */
   return pass.getAsBuffer();
 }
