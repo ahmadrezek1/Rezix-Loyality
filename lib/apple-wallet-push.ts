@@ -5,7 +5,7 @@ import { database as db } from './db';
 
 /*
  * Prüft, ob Apple Wallet Push
- * grundsätzlich konfiguriert ist.
+ * vollständig konfiguriert ist.
  */
 function applePushConfigured() {
   return Boolean(
@@ -16,14 +16,17 @@ function applePushConfigured() {
 }
 
 /*
- * Holt alle Push Tokens für
- * einen bestimmten Kunden.
+ * Push Tokens für einen einzelnen
+ * Kunden laden.
+ *
+ * Wird für Stempel / Redeem verwendet.
  */
 async function getPushTokens(
   customerId: string
 ): Promise<string[]> {
   const rows = await db()`
-    select distinct push_token
+    select distinct
+      push_token
     from apple_wallet_registrations
     where customer_id = ${customerId}
       and pass_type_identifier =
@@ -32,28 +35,31 @@ async function getPushTokens(
 
   return Array.from(rows)
     .map((row: any) =>
-      String(row.push_token || '').trim()
+      String(
+        row.push_token || ''
+      ).trim()
     )
     .filter(Boolean);
 }
 
 /*
- * Sendet einen leeren Apple Wallet Push.
+ * Sendet einen Apple Wallet Update Push
+ * an genau ein Gerät.
  *
- * Wichtig:
- * Der Push enthält keine neuen Kartendaten.
- * Er sagt dem iPhone nur:
+ * Der Push selbst enthält keine neuen
+ * Pass-Daten.
  *
- * "Für diesen Pass gibt es möglicherweise
- * eine neue Version."
- *
- * Danach fragt Wallet unseren Web Service ab.
+ * Apple Wallet bekommt dadurch nur die
+ * Information, dass eine neue Version
+ * des Passes verfügbar sein könnte.
  */
 async function sendPushToken(
   pushToken: string
 ): Promise<void> {
   const cert =
-    pemFromEnv('APPLE_PASS_CERT');
+    pemFromEnv(
+      'APPLE_PASS_CERT'
+    );
 
   const key =
     pemFromEnv(
@@ -66,18 +72,24 @@ async function sendPushToken(
     );
   }
 
-  const client = http2.connect(
-    'https://api.push.apple.com',
-    {
-      cert,
-      key,
-
-      passphrase:
-        process.env
-          .APPLE_PASS_PRIVATE_KEY_PASSPHRASE ||
-        undefined,
-    }
+  console.log(
+    'APPLE DEBUG connecting to APNs:',
+    pushToken.slice(0, 12)
   );
+
+  const client =
+    http2.connect(
+      'https://api.push.apple.com',
+      {
+        cert,
+        key,
+
+        passphrase:
+          process.env
+            .APPLE_PASS_PRIVATE_KEY_PASSPHRASE ||
+          undefined,
+      }
+    );
 
   await new Promise<void>(
     (resolve, reject) => {
@@ -104,17 +116,23 @@ async function sendPushToken(
       };
 
       /*
-       * HTTP/2 Connection Error
+       * Fehler beim Aufbau der
+       * HTTP/2 Verbindung.
        */
       client.once(
         'error',
         (error) => {
+          console.error(
+            'APPLE DEBUG HTTP2 connection error:',
+            error
+          );
+
           finish(error);
         }
       );
 
       /*
-       * Apple Wallet Push Request
+       * APNs Request.
        */
       const request =
         client.request({
@@ -126,15 +144,16 @@ async function sendPushToken(
             )}`,
 
           /*
-           * Für Wallet Pass Updates
-           * ist das Pass Type Identifier
-           * unser APNs Topic.
+           * Für Wallet Pass Updates ist
+           * das Pass Type Identifier
+           * gleichzeitig das APNs Topic.
            */
           'apns-topic':
             process.env
               .APPLE_PASS_TYPE_IDENTIFIER!,
 
-          'apns-priority': '10',
+          'apns-priority':
+            '10',
         });
 
       let responseBody = '';
@@ -152,6 +171,15 @@ async function sendPushToken(
               ':status'
             ] || 0
           );
+
+          console.log(
+            'APPLE DEBUG APNs HTTP status:',
+            status,
+            pushToken.slice(
+              0,
+              12
+            )
+          );
         }
       );
 
@@ -167,7 +195,7 @@ async function sendPushToken(
         'end',
         () => {
           /*
-           * APNs hat den Push akzeptiert.
+           * Apple hat den Push akzeptiert.
            */
           if (status === 200) {
             console.log(
@@ -184,8 +212,14 @@ async function sendPushToken(
           }
 
           /*
-           * APNs Fehler
+           * APNs hat den Push abgelehnt.
            */
+          console.error(
+            'APPLE DEBUG APNs rejected:',
+            status,
+            responseBody
+          );
+
           finish(
             new Error(
               `Apple APNs failed: ${status} ${responseBody.slice(
@@ -200,15 +234,18 @@ async function sendPushToken(
       request.on(
         'error',
         (error) => {
+          console.error(
+            'APPLE DEBUG APNs request error:',
+            error
+          );
+
           finish(error);
         }
       );
 
       /*
-       * Wallet Push Payload.
-       *
-       * Bei Pass Updates ist ein
-       * leerer JSON Body ausreichend.
+       * Für Apple Wallet Pass Updates
+       * wird ein leerer JSON Body gesendet.
        */
       request.end('{}');
     }
@@ -216,21 +253,34 @@ async function sendPushToken(
 }
 
 /*
- * =====================================
- * EINEN KUNDEN AKTUALISIEREN
- * =====================================
+ * ==========================================
+ * UPDATE FÜR EINEN EINZELNEN KUNDEN
+ * ==========================================
  *
- * Wird verwendet nach:
+ * Wird verwendet wenn:
  *
- * - Stempel hinzufügen
- * - Belohnung einlösen
+ * - Stempel hinzugefügt wird
+ * - Belohnung eingelöst wird
  */
 export async function pushAppleWalletUpdate(
   customerId: string
 ) {
-  if (!applePushConfigured()) {
-    console.log(
-      'Apple Wallet push skipped: not configured.'
+  console.log(
+    'APPLE DEBUG customer update START:',
+    customerId
+  );
+
+  const configured =
+    applePushConfigured();
+
+  console.log(
+    'APPLE DEBUG customer configured:',
+    configured
+  );
+
+  if (!configured) {
+    console.error(
+      'APPLE DEBUG customer push skipped: configuration missing'
     );
 
     return;
@@ -241,21 +291,19 @@ export async function pushAppleWalletUpdate(
       customerId
     );
 
+  console.log(
+    'APPLE DEBUG customer valid tokens:',
+    tokens.length
+  );
+
   if (!tokens.length) {
     console.log(
-      'Apple Wallet customer push: no devices found.',
+      'APPLE DEBUG customer push: no devices found.',
       customerId
     );
 
     return;
   }
-
-  console.log(
-    'Apple Wallet customer push:',
-    customerId,
-    'devices:',
-    tokens.length
-  );
 
   const results =
     await Promise.allSettled(
@@ -275,45 +323,92 @@ export async function pushAppleWalletUpdate(
       'rejected'
     ) {
       console.error(
-        'Apple Wallet APNs push failed.',
+        'APPLE DEBUG customer APNs FAILED:',
         result.reason
+      );
+    } else {
+      console.log(
+        'APPLE DEBUG customer APNs SUCCESS'
       );
     }
   }
+
+  console.log(
+    'APPLE DEBUG customer update END:',
+    customerId
+  );
 }
 
 /*
- * =====================================
- * ALLE KARTEN EINES UNTERNEHMERS
- * AKTUALISIEREN
- * =====================================
+ * ==========================================
+ * UPDATE FÜR ALLE KARTEN EINES UNTERNEHMERS
+ * ==========================================
  *
- * Wird verwendet wenn der Unternehmer
- * z.B. folgendes ändert:
+ * Wird nach Änderungen am Kartendesign
+ * verwendet.
+ *
+ * Zum Beispiel:
  *
  * - Hintergrund
  * - Logo
  * - Farbe
- * - Kartentitel
+ * - Titel
  * - Untertitel
  * - Belohnung
- * - Design
  */
 export async function pushAppleWalletBusinessUpdate(
   businessId: string
 ) {
-  if (!applePushConfigured()) {
-    console.log(
-      'Apple Wallet business push skipped: not configured.',
-      businessId
+  /*
+   * Damit sehen wir sicher, dass die
+   * Funktion überhaupt aufgerufen wird.
+   */
+  console.log(
+    'APPLE DEBUG business update START:',
+    businessId
+  );
+
+  /*
+   * Konfiguration prüfen.
+   */
+  const configured =
+    applePushConfigured();
+
+  console.log(
+    'APPLE DEBUG configured:',
+    configured,
+
+    'passType:',
+    process.env
+      .APPLE_PASS_TYPE_IDENTIFIER ||
+      'MISSING',
+
+    'cert:',
+    Boolean(
+      pemFromEnv(
+        'APPLE_PASS_CERT'
+      )
+    ),
+
+    'key:',
+    Boolean(
+      pemFromEnv(
+        'APPLE_PASS_PRIVATE_KEY'
+      )
+    )
+  );
+
+  if (!configured) {
+    console.error(
+      'APPLE DEBUG push configuration missing'
     );
 
     return;
   }
 
   /*
-   * Alle registrierten Apple Wallet
-   * Geräte dieses Unternehmens finden.
+   * Alle Apple Wallet Registrierungen
+   * dieses Unternehmens laden.
    */
   const rows = await db()`
     select distinct
@@ -322,12 +417,10 @@ export async function pushAppleWalletBusinessUpdate(
     from apple_wallet_registrations awr
 
     join customers c
-      on c.id =
-        awr.customer_id
+      on c.id = awr.customer_id
 
     where
-      c.business_id =
-        ${businessId}
+      c.business_id = ${businessId}
 
       and c.active = true
 
@@ -335,6 +428,14 @@ export async function pushAppleWalletBusinessUpdate(
         ${process.env.APPLE_PASS_TYPE_IDENTIFIER || ''}
   `;
 
+  console.log(
+    'APPLE DEBUG registration rows:',
+    rows.length
+  );
+
+  /*
+   * Push Tokens bereinigen.
+   */
   const tokens =
     Array.from(rows)
       .map((row: any) =>
@@ -345,27 +446,25 @@ export async function pushAppleWalletBusinessUpdate(
       )
       .filter(Boolean);
 
+  console.log(
+    'APPLE DEBUG valid tokens:',
+    tokens.length
+  );
+
   /*
-   * Keine Wallet Karten registriert.
+   * Keine registrierten Geräte.
    */
   if (!tokens.length) {
-    console.log(
-      'Apple Wallet business push: no devices found.',
+    console.error(
+      'APPLE DEBUG no push tokens found for business:',
       businessId
     );
 
     return;
   }
 
-  console.log(
-    'Apple Wallet business push:',
-    businessId,
-    'devices:',
-    tokens.length
-  );
-
   /*
-   * Push an alle registrierten Geräte.
+   * Push an jedes registrierte Gerät.
    */
   const results =
     await Promise.allSettled(
@@ -378,8 +477,7 @@ export async function pushAppleWalletBusinessUpdate(
     );
 
   /*
-   * Einzelne fehlerhafte Geräte dürfen
-   * die anderen Updates nicht stoppen.
+   * Ergebnisse einzeln ausgeben.
    */
   for (
     const result of results
@@ -389,14 +487,18 @@ export async function pushAppleWalletBusinessUpdate(
       'rejected'
     ) {
       console.error(
-        'Apple Wallet business design push failed.',
+        'APPLE DEBUG business APNs FAILED:',
         result.reason
+      );
+    } else {
+      console.log(
+        'APPLE DEBUG business APNs SUCCESS'
       );
     }
   }
 
   console.log(
-    'Apple Wallet business push completed.',
+    'APPLE DEBUG business update END:',
     businessId
   );
 }
