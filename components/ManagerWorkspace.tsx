@@ -12,7 +12,7 @@ import BusinessSetupChecklist from '@/components/BusinessSetupChecklist';
 import BusinessProfileSettings from '@/components/BusinessProfileSettings';
 
 export default async function ManagerPage({searchParams,view='overview'}:{searchParams:Promise<Record<string,string|undefined>>,view?:string}){
- const s=await requireManager();const q=await searchParams;const page=Math.max(1,Math.min(100000,Number.parseInt(q.page||'1',10)||1));const db=await getDashboardData(s.businessId!,page);
+ const s=await requireManager();const q=await searchParams;const page=Math.max(1,Math.min(100000,Number.parseInt(q.page||'1',10)||1));const db=await getDashboardData(s.businessId!,page,view);
  if(!db.business)return <main><section className="join"><div className="join-card"><h1>Betrieb nicht verfügbar</h1></div></section></main>;
  return <DashboardShell role="manager" name={s.name} businessName={db.business.name} logoUrl={db.business.logoUrl}>
  <section id="overview" className="dashboard-hero"><div><span className="eyebrow">BETRIEB ÜBERSICHT</span><h1>{{"overview": "Dein Betrieb im Überblick", "friseure": "Dein Team", "customers": "Kundenübersicht", "loyalty": "Karten & Belohnungen", "settings": "Betriebs-Einstellungen"}[view]}</h1><p>{db.business.name} · {db.business.billingPlan.toUpperCase()} · {billingStatusLabel(db.business.subscriptionStatus)}{db.business.subscriptionStatus==='trialing'&&db.business.trialEndsAt?` · ${Math.max(0,Math.ceil((new Date(db.business.trialEndsAt).getTime()-Date.now())/86400000))} Tage Testphase verbleibend`:null}</p></div><div className="page-actions"><a className="secondary link-button" href={`/s/${db.business.slug}`} target="_blank"><ExternalLink size={15}/> Kundenkarte öffnen</a></div></section>

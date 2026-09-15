@@ -128,3 +128,26 @@
 @media(max-width:900px){.compact-industries{grid-template-columns:repeat(3,minmax(0,1fr))}.onboarding-page-card{max-height:none}.onboarding-progress{gap:4px}}
 @media(max-width:760px){.registration-no-scroll{overflow:auto}.registration-no-scroll .multibranch-join{height:auto;min-height:calc(100dvh - 76px);padding:14px}.onboarding-paged{height:auto}.onboarding-page-card{height:auto;min-height:calc(100dvh - 150px);padding:22px 18px}.onboarding-page-card .onboarding-pane{overflow:visible}.compact-industries{grid-template-columns:1fr 1fr}.registration-review{grid-template-columns:1fr}.onboarding-progress{grid-template-columns:repeat(6,auto);overflow:hidden}.onboarding-step:after{min-width:8px}.onboarding-step b{display:none}}
 @media(max-width:480px){.compact-industries{grid-template-columns:1fr 1fr}.compact-industries .industry-option{font-size:12px;min-height:46px}.onboarding-page-card h1{font-size:28px}.form-split{grid-template-columns:1fr 1fr}.slug-input{grid-template-columns:auto minmax(0,1fr)}}
+
+/* v1.0.7 registration responsiveness + speed UX */
+@media(min-width:761px){
+ .registration-no-scroll .multibranch-join{padding:10px 24px 14px;align-items:stretch}
+ .onboarding-paged{grid-template-rows:auto minmax(0,1fr);gap:10px}
+ .onboarding-progress{grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;min-height:32px}
+ .onboarding-step{font-size:12px;min-width:0}.onboarding-step b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .onboarding-step span{width:25px;height:25px;flex:0 0 25px}
+ .onboarding-page-card{height:100%;max-height:none;min-height:0;padding:18px 26px 14px;grid-template-rows:minmax(0,1fr) auto}
+ .onboarding-page-card .onboarding-pane{overflow:visible;min-height:0;gap:8px;padding:0}
+ .onboarding-page-card h1{font-size:clamp(27px,2.6vw,36px);line-height:1.08;margin:3px 0}
+ .onboarding-page-card p{margin:0 0 3px}.onboarding-page-card label{margin:5px 0 3px}
+ .onboarding-page-card input{padding:10px 12px;min-height:42px;margin-bottom:0}
+ .onboarding-page-card .onboarding-actions{position:sticky;bottom:0;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;margin:8px -2px 0;padding:10px 2px 0;background:#fff;z-index:5}
+ .onboarding-actions>button:last-child{justify-self:end}.step-counter{font-size:12px;color:#7b8fa4;font-weight:700}
+ .compact-industries{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:4px 0}.compact-industries .industry-option{padding:8px 10px;min-height:44px}
+ .registration-two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}.registration-two-col>div{min-width:0}
+ .location-grid{display:grid;grid-template-columns:140px minmax(180px,.7fr) minmax(260px,1.3fr);gap:12px}.location-grid>div{min-width:0}
+ .compact-location-pane .onboarding-tip{padding:9px 11px;margin-top:2px}
+ .choice-card{padding:11px 13px}.registration-review>div{padding:9px 11px}.checkline{margin-top:4px}
+}
+.spin{animation:rezix-spin .8s linear infinite}@keyframes rezix-spin{to{transform:rotate(360deg)}}
+.onboarding-actions button:disabled{opacity:.65;cursor:not-allowed}

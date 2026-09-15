@@ -14,8 +14,8 @@ function iso(v:unknown){ return v instanceof Date?v.toISOString():String(v); }
 export function id(prefix:string){ return `${prefix}_${crypto.randomBytes(8).toString('hex')}`; }
 export function customerCode(){ return 'RZX-'+crypto.randomBytes(4).toString('hex').toUpperCase(); }
 export function customerToken(){ return crypto.randomBytes(24).toString('base64url'); }
-export function hashPassword(password:string, salt=crypto.randomBytes(16).toString('hex')){ const out=crypto.scryptSync(password,Buffer.from(salt,'hex'),32,{N:16384,r:8,p:1,maxmem:64*1024*1024}); return {salt,hash:'scrypt$'+out.toString('hex')}; }
-export function verifyPassword(password:string,salt:string,hash:string){ try{if(hash.startsWith('scrypt$')){const expected=Buffer.from(hash.slice(7),'hex');const actual=crypto.scryptSync(password,Buffer.from(salt,'hex'),expected.length,{N:16384,r:8,p:1,maxmem:64*1024*1024});return actual.length===expected.length&&crypto.timingSafeEqual(actual,expected)}const actual=crypto.pbkdf2Sync(password,Buffer.from(salt,'hex'),210000,32,'sha256');const expected=Buffer.from(hash,'hex');return actual.length===expected.length&&crypto.timingSafeEqual(actual,expected)}catch{return false} }
+export async function hashPassword(password:string, salt=crypto.randomBytes(16).toString('hex')){ const out=await new Promise<Buffer>((resolve,reject)=>crypto.scrypt(password,Buffer.from(salt,'hex'),32,{N:16384,r:8,p:1,maxmem:64*1024*1024},(error,key)=>error?reject(error):resolve(key))); return {salt,hash:'scrypt$'+out.toString('hex')}; }
+export async function verifyPassword(password:string,salt:string,hash:string){ try{if(hash.startsWith('scrypt$')){const expected=Buffer.from(hash.slice(7),'hex');const actual=await new Promise<Buffer>((resolve,reject)=>crypto.scrypt(password,Buffer.from(salt,'hex'),expected.length,{N:16384,r:8,p:1,maxmem:64*1024*1024},(error,key)=>error?reject(error):resolve(key)));return actual.length===expected.length&&crypto.timingSafeEqual(actual,expected)}const actual=await new Promise<Buffer>((resolve,reject)=>crypto.pbkdf2(password,Buffer.from(salt,'hex'),210000,32,'sha256',(error,key)=>error?reject(error):resolve(key)));const expected=Buffer.from(hash,'hex');return actual.length===expected.length&&crypto.timingSafeEqual(actual,expected)}catch{return false} }
 export function normalizeSlug(value:string){return value.toLowerCase().trim().replace(/[^a-z0-9äöüß-]+/g,'-').replace(/[ä]/g,'ae').replace(/[ö]/g,'oe').replace(/[ü]/g,'ue').replace(/[ß]/g,'ss').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,60)}
 function mapBusiness(r:any):Business{return {industry:r.industry||'other',loyaltyProgramType:r.loyalty_program_type||'stamps',locationName:r.location_name||null,street:r.street||null,postalCode:r.postal_code||null,city:r.city||null,country:r.country||'AT',website:r.website||null,onboardingCompleted:!!r.onboarding_completed,counterMode:r.counter_mode||'qr',customerDesign:{...defaultCustomerDesign,...r.customer_design},id:r.id,slug:r.slug,name:r.name,rewardTarget:r.reward_target,rewardText:r.reward_text,logoUrl:r.logo_url||null,stampUrl:r.stamp_url||null,cardTitle:r.card_title||'Deine Treuekarte',cardSubtitle:r.card_subtitle||'Deine digitale Treuekarte',primaryColor:r.primary_color||'#2563EB',stampShape:(r.stamp_shape||'circle'),active:r.active&&!r.archived_at,archivedAt:r.archived_at?iso(r.archived_at):null,createdAt:iso(r.created_at),billingPlan:(r.billing_plan||'trial'),subscriptionStatus:r.subscription_status||'trialing',trialStartedAt:r.trial_started_at?iso(r.trial_started_at):null,trialEndsAt:r.trial_ends_at?iso(r.trial_ends_at):null,stripeCustomerId:r.stripe_customer_id||null,stripeSubscriptionId:r.stripe_subscription_id||null,stripePriceId:r.stripe_price_id||null,subscriptionCurrentPeriodEnd:r.subscription_current_period_end?iso(r.subscription_current_period_end):null,cancelAtPeriodEnd:!!r.cancel_at_period_end,billingGraceUntil:r.billing_grace_until?iso(r.billing_grace_until):null,billingUpdatedAt:r.billing_updated_at?iso(r.billing_updated_at):null}}
 function mapStaff(r:any):StaffUser{return {id:r.id,businessId:r.business_id,name:r.name,email:r.email,passwordSalt:r.password_salt,passwordHash:r.password_hash,role:r.role,active:r.active,createdAt:iso(r.created_at),emailVerifiedAt:r.email_verified_at?iso(r.email_verified_at):null}}
@@ -26,7 +26,7 @@ export async function getBusinessById(businessId:string):Promise<Business|null>{
 export async function getBusinessBySlug(slug:string):Promise<Business|null>{const rows=await db()`select * from businesses where slug=${slug} and active=true and archived_at is null limit 1`;return rows[0]?mapBusiness(rows[0]):null}
 export async function businessSlugExists(slug:string){const rows=await db()`select 1 from businesses where slug=${slug} limit 1`;return rows.length>0}
 export async function createBusinessWithManager(input:{name:string;slug:string;industry?:string;loyaltyProgramType?:'stamps'|'points';locationName?:string|null;street?:string|null;postalCode?:string|null;city?:string|null;country?:string|null;website?:string|null;cardTitle?:string;rewardTarget:number;rewardText:string;logoUrl?:string|null;stampUrl?:string|null;managerName:string;managerEmail:string;managerPassword:string}){
-  const businessId=id('biz'); const managerId=id('usr'); const p=hashPassword(input.managerPassword);
+  const businessId=id('biz'); const managerId=id('usr'); const p=await hashPassword(input.managerPassword);
   return db().begin(async(tx:any)=>{
     await tx`insert into businesses (id,slug,name,industry,loyalty_program_type,location_name,street,postal_code,city,country,website,card_title,reward_target,reward_text,logo_url,stamp_url,billing_plan,subscription_status,trial_started_at,trial_ends_at) values (${businessId},${input.slug},${input.name},${input.industry||'other'},${input.loyaltyProgramType||'stamps'},${input.locationName||null},${input.street||null},${input.postalCode||null},${input.city||null},${input.country||'AT'},${input.website||null},${input.cardTitle||'Deine Treuekarte'},${input.rewardTarget},${input.rewardText},${input.logoUrl||null},${input.stampUrl||null},'trial','trialing',now(),now()+interval '3 days')`;
     await tx`insert into staff_users (id,business_id,name,email,password_salt,password_hash,role) values (${managerId},${businessId},${input.managerName},${input.managerEmail},${p.salt},${p.hash},'manager')`;
@@ -44,7 +44,7 @@ export async function updateBusinessCardConfig(input:{customerDesign?:CustomerDe
 export async function getStaffByEmail(email:string):Promise<StaffUser|null>{ const rows=await db()`select * from staff_users where email=${email} and active=true limit 1`; return rows[0]?mapStaff(rows[0]):null; }
 export async function staffEmailExists(email:string){ const rows=await db()`select 1 from staff_users where email=${email} limit 1`; return rows.length>0; }
 export async function createStaff(input:{businessId:string;name:string;email:string;password:string;role:'friseur'}){
- const p=hashPassword(input.password),staffId=id('usr');
+ const p=await hashPassword(input.password),staffId=id('usr');
  return db().begin(async(tx:any)=>{
   const rows=await tx`select * from businesses where id=${input.businessId} for update`;
   if(!rows[0])throw new Error('Salon nicht gefunden');const business=mapBusiness(rows[0]);
@@ -58,21 +58,24 @@ export async function createStaff(input:{businessId:string;name:string;email:str
 
 export async function getStaffById(idValue:string):Promise<StaffUser|null>{const rows=await db()`select * from staff_users where id=${idValue} and active=true limit 1`;return rows[0]?mapStaff(rows[0]):null}
 export async function markStaffEmailVerified(staffId:string){await db()`update staff_users set email_verified_at=coalesce(email_verified_at,now()) where id=${staffId}`}
-export async function updateStaffPassword(staffId:string,password:string){const p=hashPassword(password);await db()`update staff_users set password_salt=${p.salt},password_hash=${p.hash},password_changed_at=now() where id=${staffId}`}
+export async function updateStaffPassword(staffId:string,password:string){const p=await hashPassword(password);await db()`update staff_users set password_salt=${p.salt},password_hash=${p.hash},password_changed_at=now() where id=${staffId}`}
 export async function getCustomerByEmail(businessId:string,email:string):Promise<Customer|null>{ const rows=await db()`select * from customers where business_id=${businessId} and lower(email)=lower(${email}) limit 1`; return rows[0]?mapCustomer(rows[0]):null; }
 export async function createCustomer(input:{businessId:string;name:string;email:string;marketingConsent?:boolean}):Promise<Customer>{ const c={id:id('cus'),code:customerCode(),token:customerToken(),name:input.name,email:input.email.toLowerCase()}; const marketing=!!input.marketingConsent; const rows=await db()`insert into customers (id,business_id,code,token,name,email,phone,privacy_notice_ack_at,marketing_consent,marketing_consent_at) values (${c.id},${input.businessId},${c.code},${c.token},${c.name},${c.email},null,now(),${marketing},${marketing?new Date():null}) returning *`; return mapCustomer(rows[0]); }
-export async function getDashboardData(businessId:string,page=1){
+export async function getDashboardData(businessId:string,page=1,view='all'){
+  const overview=view==='all'||view==='overview';
+  const customersView=view==='all'||view==='customers';
+  const settings=view==='all'||view==='settings';
   const [business,customers,staffCount,visitCount,visitsToday,totalCustomers,activeCustomers,visitsMonth,rewards,staff]=await Promise.all([
     getBusinessById(businessId),
-    db()`select * from customers where business_id=${businessId} and active=true order by created_at desc,id desc limit 25 offset ${(page-1)*25}`,
-    db()`select count(*)::int as count from staff_users where business_id=${businessId} and role = 'friseur' and active=true`,
-    db()`select count(*)::int as count from visits where business_id=${businessId}`,
-    db()`select count(*)::int as count from visits where business_id=${businessId} and type='stamp' and created_at >= date_trunc('day', now())`,
-    db()`select count(*)::int as count from customers where business_id=${businessId} and active=true`,
-    db()`select count(*)::int as count from customers where business_id=${businessId} and active=true and last_visit_at>=now()-interval '30 days'`,
-    db()`select count(*)::int as count from visits where business_id=${businessId} and type='stamp' and created_at>=date_trunc('month',now())`,
-    db()`select coalesce(sum(rewards_redeemed),0)::int as count from customers where business_id=${businessId}`,
-    db()`select id,name,email,active,email_verified_at from staff_users where business_id=${businessId} and role='friseur' order by created_at desc`
+    customersView?db()`select * from customers where business_id=${businessId} and active=true order by created_at desc,id desc limit 25 offset ${(page-1)*25}`:[],
+    overview?db()`select count(*)::int as count from staff_users where business_id=${businessId} and role = 'friseur' and active=true`:[],
+    settings?db()`select count(*)::int as count from visits where business_id=${businessId}`:[],
+    view==='all'?db()`select count(*)::int as count from visits where business_id=${businessId} and type='stamp' and created_at >= date_trunc('day', now())`:[],
+    overview||customersView?db()`select count(*)::int as count from customers where business_id=${businessId} and active=true`:[],
+    overview?db()`select count(*)::int as count from customers where business_id=${businessId} and active=true and last_visit_at>=now()-interval '30 days'`:[],
+    overview?db()`select count(*)::int as count from visits where business_id=${businessId} and type='stamp' and created_at>=date_trunc('month',now())`:[],
+    overview?db()`select coalesce(sum(rewards_redeemed),0)::int as count from customers where business_id=${businessId}`:[],
+    view==='all'||view==='friseure'?db()`select id,name,email,active,email_verified_at from staff_users where business_id=${businessId} and role='friseur' order by created_at desc`:[]
   ]);
   return {activeCustomers:activeCustomers[0]?.count??0,visitsMonth:visitsMonth[0]?.count??0,rewards:rewards[0]?.count??0,staff,business,customers:customers.map(mapCustomer),staffCount:staffCount[0]?.count??0,visitCount:visitCount[0]?.count??0,visitsToday:visitsToday[0]?.count??0,totalCustomers:totalCustomers[0]?.count??0};
 }
