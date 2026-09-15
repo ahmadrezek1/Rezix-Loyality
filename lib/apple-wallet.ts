@@ -8,7 +8,7 @@ export function appleWalletConfigured(){return Boolean(process.env.APPLE_PASS_TY
 export async function createApplePass(customer:WalletCustomer,business:WalletBusiness){
  if(!appleWalletConfigured())throw new Error('Apple Wallet not configured');
  const passTypeIdentifier=process.env.APPLE_PASS_TYPE_IDENTIFIER!; const teamIdentifier=process.env.APPLE_TEAM_IDENTIFIER!;
- const pass=await PKPass.from({model:path.join(process.cwd(),'wallet/apple-model'),certificates:{wwdr:Buffer.from(pemFromEnv('APPLE_WWDR_CERT')!),signerCert:Buffer.from(pemFromEnv('APPLE_PASS_CERT')!),signerKey:Buffer.from(pemFromEnv('APPLE_PASS_PRIVATE_KEY')!),signerKeyPassphrase:process.env.APPLE_PASS_PRIVATE_KEY_PASSPHRASE||undefined}},
+ const pass=await PKPass.from({model:path.join(process.cwd(),'wallet/apple-model.pass'),certificates:{wwdr:Buffer.from(pemFromEnv('APPLE_WWDR_CERT')!),signerCert:Buffer.from(pemFromEnv('APPLE_PASS_CERT')!),signerKey:Buffer.from(pemFromEnv('APPLE_PASS_PRIVATE_KEY')!),signerKeyPassphrase:process.env.APPLE_PASS_PRIVATE_KEY_PASSPHRASE||undefined}},
  {passTypeIdentifier,teamIdentifier,serialNumber:customer.id,organizationName:business.name,description:`${business.name} Treuekarte`,logoText:business.name,backgroundColor:hexToRgbString(business.primary_color),foregroundColor:'rgb(255,255,255)',labelColor:'rgb(255,255,255)',authenticationToken:stableWalletToken('apple',business.id,customer.id)});
  pass.type='storeCard'; pass.primaryFields.push({key:'stamps',label:'STEMPEL',value:`${customer.stamps} / ${business.reward_target}`});
  pass.secondaryFields.push({key:'reward',label:'BELOHNUNG',value:business.reward_text}); pass.auxiliaryFields.push({key:'member',label:'MITGLIED',value:customer.name});
