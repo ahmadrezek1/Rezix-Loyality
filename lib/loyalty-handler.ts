@@ -1,16 +1,26 @@
 import { NextResponse } from 'next/server';
 
 import { currentSession } from './auth';
+
 import {
   loyaltyOperation,
   getBusinessById,
   getCustomerByCodeForBusiness,
 } from './store';
-import { sameOrigin, consumeRateLimit } from './security';
+
+import {
+  sameOrigin,
+  consumeRateLimit,
+} from './security';
+
 import {
   googleWalletConfigured,
   syncGoogleWallet,
 } from './google-wallet';
+
+import {
+  pushAppleWalletUpdate,
+} from './apple-wallet-push';
 
 export async function handleLoyalty(
   req: Request,
@@ -25,21 +35,37 @@ export async function handleLoyalty(
 
   const s = await currentSession();
 
-  if (!s || s.role !== 'friseur' || !s.businessId) {
+  if (
+    !s ||
+    s.role !== 'friseur' ||
+    !s.businessId
+  ) {
     return NextResponse.json(
       { error: 'Nicht angemeldet' },
       { status: 401 }
     );
   }
 
-  if (!await consumeRateLimit('loyalty', s.sub, 120, 1)) {
+  if (
+    !await consumeRateLimit(
+      'loyalty',
+      s.sub,
+      120,
+      1
+    )
+  ) {
     return NextResponse.json(
-      { error: 'Zu viele Anfragen. Bitte kurz warten.' },
+      {
+        error:
+          'Zu viele Anfragen. Bitte kurz warten.',
+      },
       { status: 429 }
     );
   }
 
-  const body = await req.json().catch(() => null);
+  const body = await req
+    .json()
+    .catch(() => null);
 
   const code = String(body?.code || '')
     .trim()
@@ -62,7 +88,10 @@ export async function handleLoyalty(
   }
 
   try {
-    // 1. Zuerst Loyalty-Operation sicher in der DB abschließen.
+    /*
+     * 1. Zuerst die Loyalty-Operation vollständig
+     * in PostgreSQL abschließen.
+     */
     const result = await loyaltyOperation(
       code,
       s.sub,
@@ -73,55 +102,99 @@ export async function handleLoyalty(
 
     if (result.kind === 'ok') {
       /*
-       * 2. Wallet erst NACH erfolgreicher DB-Transaktion
-       * synchronisieren.
-       *
-       * Ein Fehler bei Google Wallet darf den Stempel /
-       * die Einlösung niemals rückgängig machen.
+       * 2. Aktuellen Kunden- und Business-Stand
+       * NACH der DB-Transaktion laden.
        */
-      if (googleWalletConfigured()) {
-        try {
-          const [customer, business] = await Promise.all([
+      try {
+        const [customer, business] =
+          await Promise.all([
             getCustomerByCodeForBusiness(
               code,
               s.businessId
             ),
-            getBusinessById(s.businessId),
+
+            getBusinessById(
+              s.businessId
+            ),
           ]);
 
-          if (customer && business) {
-            await syncGoogleWallet(
-              {
-                id: customer.id,
-                code: customer.code,
-                name: customer.name,
-                stamps: customer.stamps,
-                rewards_redeemed:
-                  customer.rewardsRedeemed,
-              },
-              {
-                id: business.id,
-                name: business.name,
-                reward_target:
-                  business.rewardTarget,
-                reward_text:
-                  business.rewardText,
-                primary_color:
-                  business.primaryColor,
-                logo_url:
-                  business.logoUrl,
-              }
+        if (customer && business) {
+          /*
+           * GOOGLE WALLET
+           *
+           * Fehler dürfen die erfolgreiche
+           * Loyalty-Operation nicht rückgängig machen.
+           */
+          if (googleWalletConfigured()) {
+            try {
+              await syncGoogleWallet(
+                {
+                  id: customer.id,
+                  code: customer.code,
+                  name: customer.name,
+                  stamps: customer.stamps,
+                  rewards_redeemed:
+                    customer.rewardsRedeemed,
+                },
+                {
+                  id: business.id,
+                  name: business.name,
+                  reward_target:
+                    business.rewardTarget,
+                  reward_text:
+                    business.rewardText,
+                  primary_color:
+                    business.primaryColor,
+                  logo_url:
+                    business.logoUrl,
+                }
+              );
+            } catch (googleWalletError) {
+              console.error(
+                'Google Wallet sync after loyalty operation failed.',
+                googleWalletError
+              );
+            }
+          }
+
+          /*
+           * APPLE WALLET
+           *
+           * Sendet Push an alle für diesen Kunden
+           * registrierten Apple-Wallet-Geräte.
+           *
+           * Danach fragt Wallet den aktualisierten
+           * Pass über unseren Web Service ab.
+           */
+          try {
+            await pushAppleWalletUpdate(
+              customer.id
+            );
+          } catch (appleWalletError) {
+            console.error(
+              'Apple Wallet push after loyalty operation failed.',
+              appleWalletError
             );
           }
-        } catch (walletError) {
-          console.error(
-            'Google Wallet sync after loyalty operation failed.',
-            walletError
-          );
         }
+      } catch (walletDataError) {
+        /*
+         * Auch ein Fehler beim erneuten Laden der
+         * Wallet-Daten darf den Stempel nicht
+         * rückgängig machen.
+         */
+        console.error(
+          'Wallet data reload after loyalty operation failed.',
+          walletDataError
+        );
       }
 
-      return NextResponse.json(result.response);
+      /*
+       * Loyalty war erfolgreich.
+       */
+      return NextResponse.json(
+        result.response
+      );
     }
 
     const status =
@@ -143,7 +216,10 @@ export async function handleLoyalty(
       { status }
     );
   } catch (error) {
-    console.error('Loyalty operation failed', error);
+    console.error(
+      'Loyalty operation failed',
+      error
+    );
 
     return NextResponse.json(
       {
