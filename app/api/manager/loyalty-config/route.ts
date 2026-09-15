@@ -1,4 +1,5 @@
 import type { CustomerDesign } from '@/lib/customer-design';
+
 import { billingOperational } from '@/lib/billing';
 import { NextResponse } from 'next/server';
 import { currentSession } from '@/lib/auth';
@@ -9,7 +10,11 @@ import {
 } from '@/lib/store';
 
 import { uploadSalonAsset } from '@/lib/storage';
-import { audit, sameOrigin } from '@/lib/security';
+
+import {
+  audit,
+  sameOrigin,
+} from '@/lib/security';
 
 import {
   pushAppleWalletBusinessUpdate,
@@ -18,10 +23,20 @@ import {
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
+  /*
+   * =====================================
+   * SECURITY
+   * =====================================
+   */
+
   if (!sameOrigin(req)) {
     return NextResponse.json(
-      { error: 'Invalid origin' },
-      { status: 403 }
+      {
+        error: 'Invalid origin',
+      },
+      {
+        status: 403,
+      }
     );
   }
 
@@ -33,13 +48,24 @@ export async function POST(req: Request) {
     !s.businessId
   ) {
     return NextResponse.redirect(
-      new URL('/manager/login', req.url),
+      new URL(
+        '/manager/login',
+        req.url
+      ),
       303
     );
   }
 
+  /*
+   * =====================================
+   * BUSINESS LADEN
+   * =====================================
+   */
+
   const business =
-    await getBusinessById(s.businessId);
+    await getBusinessById(
+      s.businessId
+    );
 
   if (!business) {
     return NextResponse.redirect(
@@ -61,40 +87,71 @@ export async function POST(req: Request) {
     );
   }
 
-  const f = await req.formData();
+  /*
+   * =====================================
+   * FORM DATA
+   * =====================================
+   */
+
+  const f =
+    await req.formData();
 
   const rewardTarget =
-    Number(f.get('rewardTarget'));
+    Number(
+      f.get('rewardTarget')
+    );
 
   const rewardText =
-    String(f.get('rewardText') || '')
+    String(
+      f.get('rewardText') || ''
+    )
       .trim()
       .slice(0, 160);
 
   const cardTitle =
-    String(f.get('cardTitle') || '')
+    String(
+      f.get('cardTitle') || ''
+    )
       .trim()
       .slice(0, 80);
 
   const cardSubtitle =
-    String(f.get('cardSubtitle') || '')
+    String(
+      f.get('cardSubtitle') || ''
+    )
       .trim()
       .slice(0, 160);
 
   const primaryColor =
-    String(f.get('primaryColor') || '')
-      .trim();
+    String(
+      f.get('primaryColor') || ''
+    ).trim();
 
   const stampShape =
     String(
-      f.get('stampShape') || 'circle'
-    ) as 'circle' | 'rounded' | 'square';
+      f.get('stampShape') ||
+        'circle'
+    ) as
+      | 'circle'
+      | 'rounded'
+      | 'square';
 
-  const logo = f.get('logo');
-  const stamp = f.get('stamp');
+  const logo =
+    f.get('logo');
+
+  const stamp =
+    f.get('stamp');
+
+  /*
+   * =====================================
+   * VALIDATION
+   * =====================================
+   */
 
   if (
-    !Number.isInteger(rewardTarget) ||
+    !Number.isInteger(
+      rewardTarget
+    ) ||
     rewardTarget < 2 ||
     rewardTarget > 30 ||
     !rewardText ||
@@ -118,28 +175,60 @@ export async function POST(req: Request) {
     );
   }
 
+  /*
+   * =====================================
+   * CUSTOMER DESIGN
+   * =====================================
+   */
+
   let customerDesign:
     | CustomerDesign
     | undefined;
 
-  if (f.has('backgroundMode')) {
+  if (
+    f.has('backgroundMode')
+  ) {
     const mode =
-      String(f.get('backgroundMode'));
+      String(
+        f.get(
+          'backgroundMode'
+        )
+      );
 
     const color =
-      String(f.get('backgroundColor'));
+      String(
+        f.get(
+          'backgroundColor'
+        )
+      );
 
     const gradientColor =
-      String(f.get('gradientColor'));
+      String(
+        f.get(
+          'gradientColor'
+        )
+      );
 
     const overlay =
-      Number(f.get('backgroundOverlay'));
+      Number(
+        f.get(
+          'backgroundOverlay'
+        )
+      );
 
     const position =
-      String(f.get('backgroundPosition'));
+      String(
+        f.get(
+          'backgroundPosition'
+        )
+      );
 
     const size =
-      String(f.get('backgroundSize'));
+      String(
+        f.get(
+          'backgroundSize'
+        )
+      );
 
     if (
       ![
@@ -147,11 +236,15 @@ export async function POST(req: Request) {
         'gradient',
         'image',
       ].includes(mode) ||
-      !/^#[0-9a-f]{6}$/i.test(color) ||
+      !/^#[0-9a-f]{6}$/i.test(
+        color
+      ) ||
       !/^#[0-9a-f]{6}$/i.test(
         gradientColor
       ) ||
-      !Number.isFinite(overlay) ||
+      !Number.isFinite(
+        overlay
+      ) ||
       overlay < 0 ||
       overlay > 1 ||
       ![
@@ -178,7 +271,9 @@ export async function POST(req: Request) {
         mode as CustomerDesign['mode'],
 
       color,
+
       gradientColor,
+
       overlay,
 
       position:
@@ -188,11 +283,21 @@ export async function POST(req: Request) {
         size as CustomerDesign['size'],
 
       imageUrl:
-        f.get('removeBackground') === 'on'
+        f.get(
+          'removeBackground'
+        ) === 'on'
           ? null
-          : business.customerDesign.imageUrl,
+          : business
+              .customerDesign
+              .imageUrl,
     };
   }
+
+  /*
+   * =====================================
+   * DESIGN TEXT COLORS
+   * =====================================
+   */
 
   if (customerDesign) {
     for (
@@ -204,10 +309,14 @@ export async function POST(req: Request) {
     ) {
       if (f.has(key)) {
         const value =
-          String(f.get(key));
+          String(
+            f.get(key)
+          );
 
         if (
-          !/^#[0-9a-f]{6}$/i.test(value)
+          !/^#[0-9a-f]{6}$/i.test(
+            value
+          )
         ) {
           return NextResponse.redirect(
             new URL(
@@ -218,28 +327,59 @@ export async function POST(req: Request) {
           );
         }
 
-        customerDesign[key] = value;
+        customerDesign[key] =
+          value;
       } else if (
-        business.customerDesign[key]
+        business
+          .customerDesign[key]
       ) {
         customerDesign[key] =
-          business.customerDesign[key];
+          business
+            .customerDesign[
+              key
+            ];
       }
     }
 
+    /*
+     * =====================================
+     * OPACITY + FONT SIZES
+     * =====================================
+     */
+
     for (
-      const [key, min, max] of [
-        ['panelOpacity', 0, 1],
-        ['fontSize', 12, 22],
-        ['headingSize', 18, 42],
+      const [
+        key,
+        min,
+        max,
+      ] of [
+        [
+          'panelOpacity',
+          0,
+          1,
+        ],
+        [
+          'fontSize',
+          12,
+          22,
+        ],
+        [
+          'headingSize',
+          18,
+          42,
+        ],
       ] as const
     ) {
       if (f.has(key)) {
         const value =
-          Number(f.get(key));
+          Number(
+            f.get(key)
+          );
 
         if (
-          !Number.isFinite(value) ||
+          !Number.isFinite(
+            value
+          ) ||
           value < min ||
           value > max
         ) {
@@ -252,15 +392,27 @@ export async function POST(req: Request) {
           );
         }
 
-        customerDesign[key] = value;
+        customerDesign[key] =
+          value;
       } else if (
-        business.customerDesign[key] !==
-        undefined
+        business
+          .customerDesign[
+          key
+        ] !== undefined
       ) {
         customerDesign[key] =
-          business.customerDesign[key];
+          business
+            .customerDesign[
+              key
+            ];
       }
     }
+
+    /*
+     * =====================================
+     * FONT SETTINGS
+     * =====================================
+     */
 
     for (
       const key of [
@@ -269,21 +421,31 @@ export async function POST(req: Request) {
         'fontWeight',
       ] as const
     ) {
-      const value = f.has(key)
-        ? String(f.get(key))
-        : business.customerDesign[key];
+      const value =
+        f.has(key)
+          ? String(
+              f.get(key)
+            )
+          : business
+              .customerDesign[
+              key
+            ];
 
-      if (value !== undefined) {
+      if (
+        value !== undefined
+      ) {
         const allowed = {
           fontFamily: [
             'sans',
             'serif',
             'rounded',
           ],
+
           fontStyle: [
             'normal',
             'italic',
           ],
+
           fontWeight: [
             '400',
             '600',
@@ -292,7 +454,9 @@ export async function POST(req: Request) {
         };
 
         if (
-          !allowed[key].includes(value)
+          !allowed[
+            key
+          ].includes(value)
         ) {
           return NextResponse.redirect(
             new URL(
@@ -305,24 +469,45 @@ export async function POST(req: Request) {
 
         Object.assign(
           customerDesign,
-          { [key]: value }
+          {
+            [key]:
+              value,
+          }
         );
       }
     }
   }
 
-  let logoUrl: string | null = null;
-  let stampUrl: string | null = null;
+  /*
+   * =====================================
+   * ASSET UPLOADS
+   * =====================================
+   */
+
+  let logoUrl:
+    | string
+    | null = null;
+
+  let stampUrl:
+    | string
+    | null = null;
 
   try {
     const background =
-      f.get('background');
+      f.get(
+        'background'
+      );
 
+    /*
+     * Neues Hintergrundbild
+     */
     if (
       customerDesign &&
-      f.get('removeBackground') !==
-        'on' &&
-      background instanceof File &&
+      f.get(
+        'removeBackground'
+      ) !== 'on' &&
+      background instanceof
+        File &&
       background.size > 0
     ) {
       customerDesign.imageUrl =
@@ -332,6 +517,9 @@ export async function POST(req: Request) {
         );
     }
 
+    /*
+     * Neues Logo
+     */
     if (
       logo instanceof File &&
       logo.size > 0
@@ -343,6 +531,9 @@ export async function POST(req: Request) {
         );
     }
 
+    /*
+     * Neuer Stempel
+     */
     if (
       stamp instanceof File &&
       stamp.size > 0
@@ -369,24 +560,37 @@ export async function POST(req: Request) {
   }
 
   /*
-   * Zuerst Design sicher speichern.
+   * =====================================
+   * CONFIG SPEICHERN
+   * =====================================
    */
+
   try {
     await updateBusinessCardConfig({
       customerDesign,
-      businessId: s.businessId,
+
+      businessId:
+        s.businessId,
+
       rewardTarget,
+
       rewardText,
+
       cardTitle,
+
       cardSubtitle,
+
       primaryColor,
+
       stampShape,
+
       logoUrl,
+
       stampUrl,
     });
   } catch (error) {
     console.error(
-      'Loyalty config update failed.',
+      'Loyalty configuration update failed.',
       error
     );
 
@@ -400,39 +604,90 @@ export async function POST(req: Request) {
   }
 
   /*
-   * Danach alle registrierten Apple-Wallet-
-   * Karten dieses Unternehmers informieren.
+   * =====================================
+   * APPLE WALLET UPDATE
+   * =====================================
    *
-   * Ein APNs-Fehler darf das bereits
-   * gespeicherte Design nicht rückgängig machen.
+   * Wichtig:
+   *
+   * Erst nachdem die neue Konfiguration
+   * sicher in der DB gespeichert wurde,
+   * senden wir den APNs Push.
+   *
+   * Ein Apple-Fehler darf das Speichern
+   * des Unternehmer-Designs NICHT
+   * rückgängig machen.
    */
+
   try {
+    console.log(
+      'Apple Wallet: starting business design push.',
+      s.businessId
+    );
+
     await pushAppleWalletBusinessUpdate(
+      s.businessId
+    );
+
+    console.log(
+      'Apple Wallet: business design push finished.',
       s.businessId
     );
   } catch (error) {
     console.error(
-      'Apple Wallet design update push failed.',
+      'Apple Wallet business update failed.',
       error
     );
   }
 
+  /*
+   * =====================================
+   * AUDIT
+   * =====================================
+   */
+
   await audit({
     session: s,
-    action: 'business.loyalty.updated',
-    targetType: 'business',
-    targetId: s.businessId,
+
+    action:
+      'business.loyalty.updated',
+
+    targetType:
+      'business',
+
+    targetId:
+      s.businessId,
+
     req,
+
     metadata: {
       rewardTarget,
+
       rewardText,
+
       cardTitle,
+
       primaryColor,
+
       stampShape,
-      logoChanged: !!logoUrl,
-      stampChanged: !!stampUrl,
+
+      logoChanged:
+        !!logoUrl,
+
+      stampChanged:
+        !!stampUrl,
+
+      backgroundChanged:
+        !!customerDesign
+          ?.imageUrl,
     },
   }).catch(() => {});
+
+  /*
+   * =====================================
+   * REDIRECT
+   * =====================================
+   */
 
   return NextResponse.redirect(
     new URL(
