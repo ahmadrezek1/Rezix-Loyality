@@ -189,7 +189,7 @@ export async function loyaltyOperation(code:string,staffId:string,businessId:str
   const customers=await tx`select * from customers where code=${code} and business_id=${businessId} and active=true for update`;
   const c=customers[0],b=rows[0];if(!c)return {kind:'not-found' as const};
   if(operation==='stamp'&&c.stamps>=b.reward_target||operation==='redeem'&&c.stamps<b.reward_target)return {kind:'not-ready' as const};
-  const updated=await tx`update customers set stamps=${operation==='stamp'?c.stamps+1:0},rewards_redeemed=rewards_redeemed+${operation==='redeem'?1:0},last_visit_at=now() where id=${c.id} returning *`;
+  const updated=await tx`update customers set stamps=${operation==='stamp'?c.stamps+1:0},rewards_redeemed=rewards_redeemed+${operation==='redeem'?1:0},last_visit_at=now(),updated_at=now() where id=${c.id} returning *`;
   const next=updated[0];const response={customer:{name:next.name,code:next.code,stamps:next.stamps,rewardsRedeemed:next.rewards_redeemed},target:b.reward_target,rewardText:b.reward_text,rewardReady:next.stamps>=b.reward_target};
   await tx`insert into visits(id,business_id,customer_id,staff_id,type) values(${id('vis')},${businessId},${c.id},${staffId},${operation})`;
   await tx`insert into loyalty_operations(business_id,request_id,staff_id,customer_code,operation,response) values(${businessId},${requestId},${staffId},${code},${operation},${tx.json(response)})`;

@@ -17,6 +17,7 @@ import {
   googleWalletConfigured,
   syncGoogleWallet,
 } from './google-wallet';
+import { pushAppleWalletUpdate } from './apple-wallet-push';
 
 
 export async function handleLoyalty(
@@ -152,6 +153,22 @@ export async function handleLoyalty(
                 googleWalletError
               );
             }
+          }
+
+          /*
+           * APPLE WALLET
+           *
+           * Apple Wallet does not poll continuously. After a stamp/redeem
+           * APNs must notify every registered device so Wallet fetches the
+           * freshly generated pass from the web service.
+           */
+          try {
+            await pushAppleWalletUpdate(customer.id);
+          } catch (appleWalletError) {
+            console.error(
+              'Apple Wallet push after loyalty operation failed.',
+              appleWalletError
+            );
           }
 
         }

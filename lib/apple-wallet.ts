@@ -44,6 +44,9 @@ type WalletBusiness = {
       | 'top'
       | 'bottom';
 
+    positionX?: number;
+    positionY?: number;
+
     size?:
       | 'cover'
       | 'contain';
@@ -155,71 +158,45 @@ async function createAppleStrip(
   normal: Buffer;
   retina: Buffer;
 }> {
-  /*
-   * Position aus dem Rezix Designer
-   * auf Sharp übertragen.
-   */
-  const position =
-    design?.position === 'top'
-      ? 'north'
-      : design?.position === 'bottom'
-        ? 'south'
-        : 'centre';
+  const x = Math.max(0, Math.min(100, design?.positionX ?? 50));
+  const y = Math.max(0, Math.min(100, design?.positionY ?? 50));
+  const fit = design?.size === 'contain' ? 'contain' : 'cover';
+  const background = design?.color && /^#[0-9a-f]{6}$/i.test(design.color)
+    ? design.color
+    : '#142040';
 
-  /*
-   * cover / contain aus dem
-   * Rezix Designer übernehmen.
-   */
-  const fit:
-    | 'cover'
-    | 'contain' =
-    design?.size === 'contain'
-      ? 'contain'
-      : 'cover';
+  // Apple Wallet's strip is a fixed raster area. We calculate the crop ourselves
+  // so the manager's X/Y sliders produce the same framing in the signed pass.
+  async function render(width: number, height: number) {
+    const image = sharp(source).rotate();
+    const meta = await image.metadata();
+    const sourceWidth = meta.width || width;
+    const sourceHeight = meta.height || height;
 
-  /*
-   * Falls contain verwendet wird,
-   * brauchen freie Bereiche eine Farbe.
-   */
-  const background =
-    design?.color &&
-    /^#[0-9a-f]{6}$/i.test(
-      design.color
-    )
-      ? design.color
-      : '#142040';
+    if (fit === 'contain') {
+      const contained = await image
+        .resize(width, height, { fit: 'contain', background })
+        .png()
+        .toBuffer();
+      return contained;
+    }
 
-  /*
-   * 1x
-   */
-  const normal =
-    await sharp(source)
-      .rotate()
-      .resize(375, 123, {
-        fit,
-        position,
-        background,
-      })
+    const scale = Math.max(width / sourceWidth, height / sourceHeight);
+    const resizedWidth = Math.max(width, Math.round(sourceWidth * scale));
+    const resizedHeight = Math.max(height, Math.round(sourceHeight * scale));
+    const left = Math.round((resizedWidth - width) * (x / 100));
+    const top = Math.round((resizedHeight - height) * (y / 100));
+
+    return image
+      .resize(resizedWidth, resizedHeight, { fit: 'fill' })
+      .extract({ left, top, width, height })
       .png()
       .toBuffer();
-
-  /*
-   * Retina / 2x
-   */
-  const retina =
-    await sharp(source)
-      .rotate()
-      .resize(750, 246, {
-        fit,
-        position,
-        background,
-      })
-      .png()
-      .toBuffer();
+  }
 
   return {
-    normal,
-    retina,
+    normal: await render(375, 123),
+    retina: await render(750, 246),
   };
 }
 
