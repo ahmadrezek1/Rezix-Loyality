@@ -94,24 +94,11 @@ export async function updateBusinessCardConfig(input: {
         stamp_url = coalesce(
           ${input.stampUrl ?? null},
           stamp_url
-        ),
-
-        wallet_updated_at = now()
+        )
 
       where id = ${input.businessId}
     `;
 
-    /*
-     * مهم:
-     * تصميم Business يؤثر على جميع بطاقات العملاء.
-     * لذلك نجعل كل Customer Pass يمتلك updated_at جديدًا.
-     */
-    await tx`
-      update customers
-      set updated_at = now()
-      where business_id = ${input.businessId}
-        and active = true
-    `;
   });
 }
     

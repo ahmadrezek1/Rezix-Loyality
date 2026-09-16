@@ -18,9 +18,6 @@ import {
   syncGoogleWallet,
 } from './google-wallet';
 
-import {
-  pushAppleWalletUpdate,
-} from './apple-wallet-push';
 
 export async function handleLoyalty(
   req: Request,
@@ -157,25 +154,6 @@ export async function handleLoyalty(
             }
           }
 
-          /*
-           * APPLE WALLET
-           *
-           * Sendet Push an alle für diesen Kunden
-           * registrierten Apple-Wallet-Geräte.
-           *
-           * Danach fragt Wallet den aktualisierten
-           * Pass über unseren Web Service ab.
-           */
-          try {
-            await pushAppleWalletUpdate(
-              customer.id
-            );
-          } catch (appleWalletError) {
-            console.error(
-              'Apple Wallet push after loyalty operation failed.',
-              appleWalletError
-            );
-          }
         }
       } catch (walletDataError) {
         /*

@@ -5,7 +5,6 @@ import { PKPass } from 'passkit-generator';
 import {
   hexToRgbString,
   pemFromEnv,
-  stableWalletToken,
 } from './wallet-common';
 
 type WalletCustomer = {
@@ -358,28 +357,6 @@ export async function createApplePass(
       labelColor:
         'rgb(255,255,255)',
 
-      /*
-       * Apple Web Service Auth.
-       */
-      authenticationToken:
-        stableWalletToken(
-          'apple',
-          business.id,
-          customer.id
-        ),
-
-      /*
-       * Apple Wallet Web Service.
-       *
-       * Darüber lädt das iPhone nach
-       * einem APNs Push die neue Karte.
-       */
-      webServiceURL:
-        `${
-          process.env
-            .NEXT_PUBLIC_APP_URL ||
-          'https://loyality.rezix.at'
-        }/api/wallet/apple/v1`,
     }
   );
 

@@ -16,9 +16,6 @@ import {
   sameOrigin,
 } from '@/lib/security';
 
-import {
-  pushAppleWalletBusinessUpdate,
-} from '@/lib/apple-wallet-push';
 
 export const runtime = 'nodejs';
 
@@ -223,12 +220,9 @@ export async function POST(req: Request) {
         )
       );
 
-    const size =
-      String(
-        f.get(
-          'backgroundSize'
-        )
-      );
+    const size = String(f.get('backgroundSize'));
+    const positionX = Number(f.get('backgroundPositionX') ?? 50);
+    const positionY = Number(f.get('backgroundPositionY') ?? 50);
 
     if (
       ![
@@ -252,10 +246,9 @@ export async function POST(req: Request) {
         'top',
         'bottom',
       ].includes(position) ||
-      ![
-        'cover',
-        'contain',
-      ].includes(size)
+      !['cover','contain'].includes(size) ||
+      !Number.isFinite(positionX) || positionX < 0 || positionX > 100 ||
+      !Number.isFinite(positionY) || positionY < 0 || positionY > 100
     ) {
       return NextResponse.redirect(
         new URL(
@@ -276,8 +269,9 @@ export async function POST(req: Request) {
 
       overlay,
 
-      position:
-        position as CustomerDesign['position'],
+      position: position as CustomerDesign['position'],
+      positionX,
+      positionY,
 
       size:
         size as CustomerDesign['size'],
@@ -600,43 +594,6 @@ export async function POST(req: Request) {
         req.url
       ),
       303
-    );
-  }
-
-  /*
-   * =====================================
-   * APPLE WALLET UPDATE
-   * =====================================
-   *
-   * Wichtig:
-   *
-   * Erst nachdem die neue Konfiguration
-   * sicher in der DB gespeichert wurde,
-   * senden wir den APNs Push.
-   *
-   * Ein Apple-Fehler darf das Speichern
-   * des Unternehmer-Designs NICHT
-   * rückgängig machen.
-   */
-
-  try {
-    console.log(
-      'Apple Wallet: starting business design push.',
-      s.businessId
-    );
-
-    await pushAppleWalletBusinessUpdate(
-      s.businessId
-    );
-
-    console.log(
-      'Apple Wallet: business design push finished.',
-      s.businessId
-    );
-  } catch (error) {
-    console.error(
-      'Apple Wallet business update failed.',
-      error
     );
   }
 

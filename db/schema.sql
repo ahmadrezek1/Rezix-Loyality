@@ -194,3 +194,9 @@ create index if not exists idx_businesses_subscription_status on businesses(subs
 create table if not exists stripe_webhook_events (event_id text primary key,event_type text not null,livemode boolean not null default false,processed boolean not null default false,processing_started_at timestamptz,attempts integer not null default 0,last_error text,received_at timestamptz not null default now(),processed_at timestamptz);
 create table if not exists billing_history (id text primary key,business_id text not null references businesses(id) on delete cascade,event_type text not null,stripe_event_id text,subscription_status text,billing_plan text,amount_total bigint,currency text,metadata jsonb not null default '{}'::jsonb,created_at timestamptz not null default now());
 create index if not exists idx_billing_history_business on billing_history(business_id,created_at desc);
+
+-- v1.0.2 Customer quick PIN
+alter table customers add column if not exists pin_salt text;
+alter table customers add column if not exists pin_hash text;
+alter table customers add column if not exists pin_set_at timestamptz;
+create index if not exists idx_customers_business_email_lower on customers(business_id, lower(email));
