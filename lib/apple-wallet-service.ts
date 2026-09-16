@@ -66,8 +66,9 @@ export async function getApplePassCustomer(
       b.logo_url,
       b.stamp_url,
       b.card_title,
-      b.card_subtitle
-      b.customer_design
+      b.card_subtitle,
+      b.customer_design,
+      b.wallet_updated_at
 
     from customers c
 
@@ -88,10 +89,11 @@ export async function getApplePassCustomer(
 /**
  * Registriert ein Apple-Gerät für Pass-Updates.
  *
- * Existiert die Registrierung bereits, wird lediglich
- * der Push Token aktualisiert.
+ * Existiert die Registrierung bereits,
+ * wird der Push Token aktualisiert.
  *
  * Rückgabe:
+ *
  * true  = neue Registrierung
  * false = bestehende Registrierung aktualisiert
  */
@@ -178,8 +180,19 @@ export async function unregisterAppleDevice(input: {
 }
 
 /**
- * Liefert Apple alle registrierten Pässe eines Geräts,
- * die seit dem letzten bekannten Stand geändert wurden.
+ * Liefert Apple alle registrierten Pässe
+ * eines Geräts, die seit dem letzten
+ * bekannten Stand geändert wurden.
+ *
+ * Ein Pass gilt als aktualisiert wenn:
+ *
+ * 1. customers.updated_at geändert wurde
+ *    -> z.B. neuer Stempel
+ *
+ * ODER
+ *
+ * 2. businesses.wallet_updated_at geändert wurde
+ *    -> z.B. Farbe, Logo, Hintergrund, Kartendesign
  */
 export async function getAppleUpdatedSerialNumbers(input: {
   deviceLibraryIdentifier: string;
@@ -190,58 +203,105 @@ export async function getAppleUpdatedSerialNumbers(input: {
     ? new Date(input.passesUpdatedSince)
     : null;
 
-  /*
-   * Ungültiger passesUpdatedSince-Wert.
+  /**
+   * Ungültigen Timestamp ablehnen.
    */
-  if (since && Number.isNaN(since.getTime())) {
+  if (
+    since &&
+    Number.isNaN(since.getTime())
+  ) {
     return null;
   }
 
+  /**
+   * Apple hat bereits einen letzten
+   * Update-Stand geschickt.
+   */
   const rows = since
     ? await db()`
         select
           r.serial_number,
-          c.updated_at
+
+          greatest(
+            c.updated_at,
+            b.wallet_updated_at
+          ) as pass_updated_at
 
         from apple_wallet_registrations r
 
         join customers c
           on c.id = r.customer_id
 
-        where r.device_library_identifier =
-          ${input.deviceLibraryIdentifier}
+        join businesses b
+          on b.id = c.business_id
+
+        where
+          r.device_library_identifier =
+            ${input.deviceLibraryIdentifier}
 
           and r.pass_type_identifier =
             ${input.passTypeIdentifier}
 
           and c.active = true
 
-          and c.updated_at >
-            ${since.toISOString()}
+          and b.active = true
 
-        order by c.updated_at asc
+          and b.archived_at is null
+
+          and greatest(
+            c.updated_at,
+            b.wallet_updated_at
+          ) > ${since.toISOString()}
+
+        order by
+          pass_updated_at asc
       `
+
+    /**
+     * Apple hat noch keinen
+     * passesUpdatedSince-Wert geschickt.
+     */
     : await db()`
         select
           r.serial_number,
-          c.updated_at
+
+          greatest(
+            c.updated_at,
+            b.wallet_updated_at
+          ) as pass_updated_at
 
         from apple_wallet_registrations r
 
         join customers c
           on c.id = r.customer_id
 
-        where r.device_library_identifier =
-          ${input.deviceLibraryIdentifier}
+        join businesses b
+          on b.id = c.business_id
+
+        where
+          r.device_library_identifier =
+            ${input.deviceLibraryIdentifier}
 
           and r.pass_type_identifier =
             ${input.passTypeIdentifier}
 
           and c.active = true
 
-        order by c.updated_at asc
+          and b.active = true
+
+          and b.archived_at is null
+
+        order by
+          pass_updated_at asc
       `;
 
+  /**
+   * Keine aktualisierten Pässe.
+   *
+   * Die API Route macht daraus:
+   *
+   * HTTP 204 No Content
+   */
   if (!rows.length) {
     return {
       serialNumbers: [] as string[],
@@ -249,15 +309,32 @@ export async function getAppleUpdatedSerialNumbers(input: {
     };
   }
 
-  const last = rows[rows.length - 1];
+  /**
+   * Weil ASC sortiert wurde,
+   * besitzt der letzte Datensatz
+   * den neuesten Timestamp.
+   */
+  const last =
+    rows[rows.length - 1];
 
   return {
+    /**
+     * Apple bekommt alle Pass-IDs,
+     * die erneut heruntergeladen
+     * werden sollen.
+     */
     serialNumbers: rows.map(
-      (row: any) => String(row.serial_number)
+      (row: any) =>
+        String(row.serial_number)
     ),
 
+    /**
+     * Apple verwendet diesen Wert
+     * beim nächsten Request wieder
+     * als passesUpdatedSince.
+     */
     lastUpdated: new Date(
-      last.updated_at
+      last.pass_updated_at
     ).toISOString(),
   };
 }

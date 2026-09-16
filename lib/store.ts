@@ -40,8 +40,120 @@ export async function updateBusinessProfile(input:{businessId:string;name:string
 }
 
 export async function updateBusinessAssets(businessId:string, logoUrl:string|null, stampUrl:string|null){await db()`update businesses set logo_url=coalesce(${logoUrl},logo_url),stamp_url=coalesce(${stampUrl},stamp_url) where id=${businessId}`}
-export async function updateBusinessCardConfig(input:{customerDesign?:CustomerDesign;businessId:string;rewardTarget:number;rewardText:string;cardTitle:string;cardSubtitle:string;primaryColor:string;stampShape:'circle'|'rounded'|'square';logoUrl?:string|null;stampUrl?:string|null}){return db().begin(async(tx:any)=>{const rows=await tx`select * from businesses where id=${input.businessId} for update`;if(!rows[0]||!billingOperational(mapBusiness(rows[0])))throw new Error('Tarif nicht aktiv');await tx`update businesses set customer_design=coalesce(${input.customerDesign?tx.json(input.customerDesign):null}::jsonb,customer_design),reward_target=${input.rewardTarget},reward_text=${input.rewardText},card_title=${input.cardTitle},card_subtitle=${input.cardSubtitle},primary_color=${input.primaryColor},stamp_shape=${input.stampShape},logo_url=coalesce(${input.logoUrl??null},logo_url),stamp_url=coalesce(${input.stampUrl??null},stamp_url) where id=${input.businessId}`;});}
-export async function getStaffByEmail(email:string):Promise<StaffUser|null>{ const rows=await db()`select * from staff_users where email=${email} and active=true limit 1`; return rows[0]?mapStaff(rows[0]):null; }
+export async function updateBusinessCardConfig(input: {
+  customerDesign?: CustomerDesign;
+  businessId: string;
+  rewardTarget: number;
+  rewardText: string;
+  cardTitle: string;
+  cardSubtitle: string;
+  primaryColor: string;
+  stampShape: 'circle' | 'rounded' | 'square';
+  logoUrl?: string | null;
+  stampUrl?: string | null;
+}) {
+  return db().begin(async (tx: any) => {
+    /*
+     * Business sperren, damit zwei Änderungen
+     * nicht gleichzeitig kollidieren.
+     */
+    const rows = await tx`
+      select *
+      from businesses
+      where id = ${input.businessId}
+      for update
+    `;
+
+    if (
+      !rows[0] ||
+      !billingOperational(
+        mapBusiness(rows[0])
+      )
+    ) {
+      throw new Error(
+        'Tarif nicht aktiv'
+      );
+    }
+
+    /*
+     * Kartendesign speichern.
+     *
+     * WICHTIG:
+     * wallet_updated_at wird bei jeder
+     * Designänderung aktualisiert.
+     *
+     * Dadurch erkennt Apple Wallet später,
+     * dass alle Pässe dieses Unternehmens
+     * eine neue Version haben.
+     */
+    await tx`
+      update businesses
+      set
+        customer_design = coalesce(
+          ${
+            input.customerDesign
+              ? tx.json(
+                  input.customerDesign
+                )
+              : null
+          }::jsonb,
+          customer_design
+        ),
+
+        reward_target =
+          ${input.rewardTarget},
+
+        reward_text =
+          ${input.rewardText},
+
+        card_title =
+          ${input.cardTitle},
+
+        card_subtitle =
+          ${input.cardSubtitle},
+
+        primary_color =
+          ${input.primaryColor},
+
+        stamp_shape =
+          ${input.stampShape},
+
+        logo_url = coalesce(
+          ${input.logoUrl ?? null},
+          logo_url
+        ),
+
+        stamp_url = coalesce(
+          ${input.stampUrl ?? null},
+          stamp_url
+        ),
+
+        wallet_updated_at = now()
+
+      where id =
+        ${input.businessId}
+    `;
+  });
+}
+    
+  
+
+
+export async function getStaffByEmail(
+  email: string
+): Promise<StaffUser | null> {
+  const rows = await db()`
+    select *
+    from staff_users
+    where email = ${email}
+      and active = true
+    limit 1
+  `;
+
+  return rows[0]
+    ? mapStaff(rows[0])
+    : null;
+}
 export async function staffEmailExists(email:string){ const rows=await db()`select 1 from staff_users where email=${email} limit 1`; return rows.length>0; }
 export async function createStaff(input:{businessId:string;name:string;email:string;password:string;role:'friseur'}){
  const p=hashPassword(input.password),staffId=id('usr');
