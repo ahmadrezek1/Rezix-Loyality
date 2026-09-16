@@ -10,6 +10,7 @@ import {
 } from '@/lib/store';
 
 import { uploadSalonAsset } from '@/lib/storage';
+import { pushAppleWalletBusinessUpdate } from '@/lib/apple-wallet-push';
 
 import {
   audit,
@@ -576,6 +577,14 @@ export async function POST(req: Request) {
       ),
       303
     );
+  }
+
+  // Notify all installed Apple Wallet passes after the design was committed.
+  // A failed push must not roll back a successfully saved manager configuration.
+  try {
+    await pushAppleWalletBusinessUpdate(s.businessId);
+  } catch (error) {
+    console.error('Apple Wallet business update push failed.', error);
   }
 
   /*

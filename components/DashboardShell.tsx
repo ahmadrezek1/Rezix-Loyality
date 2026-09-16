@@ -1,7 +1,7 @@
 'use client';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Home, Users, Scissors, CreditCard, Settings, Gift, LogOut, ScanLine, UserRoundSearch, Store, ShieldCheck } from 'lucide-react';
+import { Home, Users, Scissors, CreditCard, Settings, Gift, LogOut, ScanLine, UserRoundSearch, Store, ShieldCheck, Activity } from 'lucide-react';
 
 export type DashboardRole='admin'|'manager'|'friseur';
 
@@ -14,8 +14,9 @@ const adminItems=[
 const managerItems=[
  {href:'/manager',label:'Übersicht',icon:Home},
  {href:'/manager/customers',label:'Kunden',icon:Users},
- {href:'/manager/friseure',label:'Mitarbeiter',icon:Scissors},
+ {href:'/manager/activity',label:'Aktivität',icon:Activity},
  {href:'/manager/loyalty',label:'Treueprogramm',icon:Gift},
+ {href:'/manager/friseure',label:'Team',icon:Scissors},
  {href:'/manager/billing',label:'Tarif & Abrechnung',icon:CreditCard},
  {href:'/manager/settings',label:'Einstellungen',icon:Settings},
 ];

@@ -214,7 +214,7 @@ export async function getAppleUpdatedSerialNumbers(input: {
     ? await db()`
         select
           r.serial_number,
-          c.updated_at as pass_updated_at
+          greatest(c.updated_at, coalesce(b.wallet_updated_at, c.updated_at)) as pass_updated_at
 
         from apple_wallet_registrations r
 
@@ -235,15 +235,15 @@ export async function getAppleUpdatedSerialNumbers(input: {
           and b.active = true
           and b.archived_at is null
 
-          and c.updated_at >
+          and greatest(c.updated_at, coalesce(b.wallet_updated_at, c.updated_at)) >
             ${since.toISOString()}
 
-        order by c.updated_at asc
+        order by pass_updated_at asc
       `
     : await db()`
         select
           r.serial_number,
-          c.updated_at as pass_updated_at
+          greatest(c.updated_at, coalesce(b.wallet_updated_at, c.updated_at)) as pass_updated_at
 
         from apple_wallet_registrations r
 
@@ -264,7 +264,7 @@ export async function getAppleUpdatedSerialNumbers(input: {
           and b.active = true
           and b.archived_at is null
 
-        order by c.updated_at asc
+        order by pass_updated_at asc
       `;
 
   if (!rows.length) {

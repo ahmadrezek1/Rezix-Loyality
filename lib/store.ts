@@ -94,7 +94,9 @@ export async function updateBusinessCardConfig(input: {
         stamp_url = coalesce(
           ${input.stampUrl ?? null},
           stamp_url
-        )
+        ),
+
+        wallet_updated_at = now()
 
       where id = ${input.businessId}
     `;
@@ -169,6 +171,15 @@ export async function getManagerViewData(businessId:string,view:string,page=1){
   db()`select count(*)::int as total, count(*) filter(where type='stamp' and created_at>=date_trunc('day',now()))::int as today, count(*) filter(where type='stamp' and created_at>=date_trunc('month',now()))::int as month from visits where business_id=${businessId}`
  ]);
  return {business,staff:[],customers:[],staffCount:staffCount[0]?.count??0,totalCustomers:customerStats[0]?.total??0,activeCustomers:customerStats[0]?.active??0,rewards:customerStats[0]?.rewards??0,visitCount:visitStats[0]?.total??0,visitsToday:visitStats[0]?.today??0,visitsMonth:visitStats[0]?.month??0};
+}
+
+export async function getManagerActivity(businessId:string,page=1){
+ const limit=40,offset=(Math.max(1,page)-1)*limit;
+ const [rows,total]=await Promise.all([
+  db()`select v.id,v.type,v.created_at,c.name as customer_name,c.code as customer_code,s.name as staff_name from visits v join customers c on c.id=v.customer_id left join staff_users s on s.id=v.staff_id where v.business_id=${businessId} order by v.created_at desc,v.id desc limit ${limit} offset ${offset}`,
+  db()`select count(*)::int as count from visits where business_id=${businessId}`
+ ]);
+ return {items:rows.map((r:any)=>({id:r.id,type:r.type,createdAt:iso(r.created_at),customerName:r.customer_name,customerCode:r.customer_code,staffName:r.staff_name||'—'})),total:total[0]?.count??0,limit};
 }
 
 export async function getDashboardData(businessId:string,page=1){return getManagerViewData(businessId,'overview',page);}

@@ -152,8 +152,11 @@ async function sendPushToken(
             process.env
               .APPLE_PASS_TYPE_IDENTIFIER!,
 
+          'apns-push-type':
+            'background',
+
           'apns-priority':
-            '10',
+            '5',
         });
 
       let responseBody = '';

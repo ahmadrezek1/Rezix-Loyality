@@ -1,0 +1,11 @@
+import DashboardShell from '@/components/DashboardShell';
+import {requireManager} from '@/lib/auth';
+import {getBusinessById,getManagerActivity} from '@/lib/store';
+import {CheckCircle2,Gift,History} from 'lucide-react';
+import Link from 'next/link';
+export const dynamic='force-dynamic';
+export default async function ActivityPage({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){
+ const s=await requireManager(); const q=await searchParams; const page=Math.max(1,Number.parseInt(q.page||'1',10)||1);
+ const [business,data]=await Promise.all([getBusinessById(s.businessId!),getManagerActivity(s.businessId!,page)]); if(!business)return null;
+ return <DashboardShell role="manager" name={s.name} businessName={business.name}><section className="stampeo-page-head"><div><h1>Aktivität</h1><p>Alle Stempel und eingelösten Belohnungen deines Betriebs.</p></div></section><section className="activity-card"><div className="activity-title"><History size={19}/><b>Letzte Aktivitäten</b><span>{data.total} Einträge</span></div>{data.items.length===0?<div className="empty-block"><History size={34}/><b>Noch keine Aktivität</b><span>Sobald dein Team Stempel vergibt oder Belohnungen einlöst, erscheinen die Vorgänge hier.</span></div>:<div className="activity-table"><div className="activity-row activity-header"><span>Aktion</span><span>Kunde</span><span>Mitarbeiter</span><span>Zeitpunkt</span></div>{data.items.map(x=><div className="activity-row" key={x.id}><span className={x.type==='redeem'?'activity-kind reward':'activity-kind'}>{x.type==='redeem'?<Gift size={16}/>:<CheckCircle2 size={16}/>} {x.type==='redeem'?'Belohnung eingelöst':'Stempel hinzugefügt'}</span><span><b>{x.customerName}</b><small>{x.customerCode}</small></span><span>{x.staffName}</span><span>{new Date(x.createdAt).toLocaleString('de-DE',{dateStyle:'medium',timeStyle:'short'})}</span></div>)}</div>}<nav className="pagination">{page>1?<Link className="secondary" href={`/manager/activity?page=${page-1}`}>Zurück</Link>:<span/>}<span>Seite {page}</span>{page*data.limit<data.total?<Link className="secondary" href={`/manager/activity?page=${page+1}`}>Weiter</Link>:<span/>}</nav></section></DashboardShell>
+}
