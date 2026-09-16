@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
-export type CustomerDesign = { panelOpacity?:number; textColor?:string; headingColor?:string; mutedColor?:string; fontFamily?:'sans'|'serif'|'rounded'; fontStyle?:'normal'|'italic'; fontWeight?:'400'|'600'|'700'; fontSize?:number; headingSize?:number; mode:'color'|'gradient'|'image'; color:string; gradientColor:string; imageUrl:string|null; overlay:number; position:'center'|'top'|'bottom'; positionX?:number; positionY?:number; size:'cover'|'contain' };
-export const defaultCustomerDesign:CustomerDesign={mode:'color',color:'#F5F7FA',gradientColor:'#DBEAFE',imageUrl:null,overlay:0,position:'center',positionX:50,positionY:50,size:'cover'};
+export type CustomerDesign = { panelOpacity?:number; textColor?:string; headingColor?:string; mutedColor?:string; fontFamily?:'sans'|'serif'|'rounded'; fontStyle?:'normal'|'italic'; fontWeight?:'400'|'600'|'700'; fontSize?:number; headingSize?:number; mode:'color'|'gradient'|'image'; color:string; gradientColor:string; imageUrl:string|null; overlay:number; position:'center'|'top'|'bottom'; positionX?:number; positionY?:number; size:'cover'|'contain'; stampSymbol?:'check'|'star'|'heart'|'gift'|'coffee'|'scissors' };
+export const defaultCustomerDesign:CustomerDesign={mode:'color',color:'#F5F7FA',gradientColor:'#DBEAFE',imageUrl:null,overlay:0,position:'center',positionX:50,positionY:50,size:'cover',stampSymbol:'check'};
 export function customerBackground(d:CustomerDesign=defaultCustomerDesign):CSSProperties {
  const a=designAppearance(d),layers:string[]=[];
  if(d.overlay>0)layers.push(`linear-gradient(rgba(255,255,255,${d.overlay}),rgba(255,255,255,${d.overlay}))`);

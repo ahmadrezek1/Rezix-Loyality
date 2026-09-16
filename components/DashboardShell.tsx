@@ -29,11 +29,11 @@ export default function DashboardShell({role,name,businessName,logoUrl,children}
  const pathname=usePathname();
  const activeHref=(href:string)=>pathname===href||(href.endsWith('/salons')&&pathname.startsWith(href+'/'));
  const items=role==='admin'?adminItems:role==='manager'?managerItems:friseurItems;
- return <div className={`dashboard-app dashboard-${role}`}>
+ return <div className="dashboard-app">
   <aside className="dashboard-sidebar">
    <div className="sidebar-brand">
     <img src="/rezix-logo.svg" alt="Rezix"/>
-    <div><span>{role==='admin'?'ADMIN':role==='manager'?'MANAGER':'MITARBEITER'}</span></div>
+    <div><b>REZIX</b><span>{role==='admin'?'ADMIN':role==='manager'?'MANAGER':'MITARBEITER'}</span></div>
    </div>
    <nav className="sidebar-nav" aria-label="Hauptnavigation">
     {items.map(({href,label,icon:Icon})=><Link key={href} href={href} aria-current={activeHref(href)?'page':undefined} title={label} className={`sidebar-link ${activeHref(href)?'active':''}`}><Icon size={19}/><span>{label}</span></Link>)}
@@ -48,7 +48,7 @@ export default function DashboardShell({role,name,businessName,logoUrl,children}
   </aside>
   <div className="dashboard-main">
    <header className="dashboard-header">
-    <div className="mobile-brand"><img src="/rezix-header-logo.svg" alt="Rezix"/><b>{businessName||'Rezix Loyalty'}</b></div>
+    <div className="mobile-brand"><img src="/rezix-logo.svg" alt="Rezix"/><b>{businessName||'Rezix Loyalty'}</b></div>
     <div className="header-breadcrumb">{businessName||'Rezix Loyalty'} <span>/</span> <b>{items.find(item=>activeHref(item.href))?.label}</b></div><div className="header-spacer"/><form className="mobile-logout" method="post" action="/api/logout"><button className="secondary" aria-label="Abmelden"><LogOut size={18}/></button></form>
     <div className="header-role"><div className="sidebar-avatar small">{(name||role).slice(0,1).toUpperCase()}</div><div><b>{name||role}</b><span>{role==='admin'?'Admin':role==='manager'?'Manager':'Mitarbeiter'}</span></div></div>
    </header>

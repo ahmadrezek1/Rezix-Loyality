@@ -136,8 +136,7 @@ export async function POST(req: Request) {
   const logo =
     f.get('logo');
 
-  const stamp =
-    f.get('stamp');
+  const stampSymbol = String(f.get('stampSymbol') || 'check');
 
   /*
    * =====================================
@@ -277,13 +276,8 @@ export async function POST(req: Request) {
         size as CustomerDesign['size'],
 
       imageUrl:
-        f.get(
-          'removeBackground'
-        ) === 'on'
-          ? null
-          : business
-              .customerDesign
-              .imageUrl,
+        f.get('removeBackground') === 'on' ? null : business.customerDesign.imageUrl,
+      stampSymbol: ['check','star','heart','gift','coffee','scissors'].includes(stampSymbol) ? stampSymbol as CustomerDesign['stampSymbol'] : 'check',
     };
   }
 
@@ -525,19 +519,6 @@ export async function POST(req: Request) {
         );
     }
 
-    /*
-     * Neuer Stempel
-     */
-    if (
-      stamp instanceof File &&
-      stamp.size > 0
-    ) {
-      stampUrl =
-        await uploadSalonAsset(
-          stamp,
-          `${business.slug}/stamp`
-        );
-    }
   } catch (error) {
     console.error(
       'Loyalty asset upload failed.',
@@ -578,7 +559,7 @@ export async function POST(req: Request) {
 
       stampShape,
 
-      logoUrl,
+      logoUrl: f.get('removeLogo') === 'on' ? '' : logoUrl,
 
       stampUrl,
     });

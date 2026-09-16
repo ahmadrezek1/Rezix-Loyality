@@ -86,10 +86,10 @@ export async function updateBusinessCardConfig(input: {
         primary_color = ${input.primaryColor},
         stamp_shape = ${input.stampShape},
 
-        logo_url = coalesce(
-          ${input.logoUrl ?? null},
-          logo_url
-        ),
+        logo_url = case
+          when ${input.logoUrl === ''} then null
+          else coalesce(${input.logoUrl ?? null}, logo_url)
+        end,
 
         stamp_url = coalesce(
           ${input.stampUrl ?? null},
