@@ -5,6 +5,7 @@ import { PKPass } from 'passkit-generator';
 import {
   hexToRgbString,
   pemFromEnv,
+  stableWalletToken,
 } from './wallet-common';
 
 type WalletCustomer = {
@@ -262,6 +263,30 @@ export async function createApplePass(
     process.env.APPLE_TEAM_IDENTIFIER!;
 
   /*
+   * Apple Wallet Web Service is required for automatic pass updates.
+   * Without webServiceURL + authenticationToken iOS never registers the
+   * installed pass and APNs has no device token to notify after a stamp.
+   */
+  const configuredAppUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, '') ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : '');
+
+  if (!configuredAppUrl || !configuredAppUrl.startsWith('https://')) {
+    throw new Error(
+      'Apple Wallet automatic updates require NEXT_PUBLIC_APP_URL with an HTTPS production URL'
+    );
+  }
+
+  const webServiceURL = `${configuredAppUrl}/api/wallet/apple/v1`;
+  const authenticationToken = stableWalletToken(
+    'apple',
+    business.id,
+    customer.id
+  );
+
+  /*
    * Basis-Pass aus unserem Model laden.
    */
   const pass = await PKPass.from(
@@ -300,6 +325,10 @@ export async function createApplePass(
     {
       passTypeIdentifier,
       teamIdentifier,
+
+      // Required by PassKit for device registration and automatic updates.
+      webServiceURL,
+      authenticationToken,
 
       /*
        * Ein Kunde = eine eindeutige
