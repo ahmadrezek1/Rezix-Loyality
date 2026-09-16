@@ -53,10 +53,6 @@ export async function updateBusinessCardConfig(input: {
   stampUrl?: string | null;
 }) {
   return db().begin(async (tx: any) => {
-    /*
-     * Business sperren, damit zwei Änderungen
-     * nicht gleichzeitig kollidieren.
-     */
     const rows = await tx`
       select *
       from businesses
@@ -66,57 +62,29 @@ export async function updateBusinessCardConfig(input: {
 
     if (
       !rows[0] ||
-      !billingOperational(
-        mapBusiness(rows[0])
-      )
+      !billingOperational(mapBusiness(rows[0]))
     ) {
-      throw new Error(
-        'Tarif nicht aktiv'
-      );
+      throw new Error('Tarif nicht aktiv');
     }
 
-    /*
-     * Kartendesign speichern.
-     *
-     * WICHTIG:
-     * wallet_updated_at wird bei jeder
-     * Designänderung aktualisiert.
-     *
-     * Dadurch erkennt Apple Wallet später,
-     * dass alle Pässe dieses Unternehmens
-     * eine neue Version haben.
-     */
     await tx`
       update businesses
       set
         customer_design = coalesce(
           ${
             input.customerDesign
-              ? tx.json(
-                  input.customerDesign
-                )
+              ? tx.json(input.customerDesign)
               : null
           }::jsonb,
           customer_design
         ),
 
-        reward_target =
-          ${input.rewardTarget},
-
-        reward_text =
-          ${input.rewardText},
-
-        card_title =
-          ${input.cardTitle},
-
-        card_subtitle =
-          ${input.cardSubtitle},
-
-        primary_color =
-          ${input.primaryColor},
-
-        stamp_shape =
-          ${input.stampShape},
+        reward_target = ${input.rewardTarget},
+        reward_text = ${input.rewardText},
+        card_title = ${input.cardTitle},
+        card_subtitle = ${input.cardSubtitle},
+        primary_color = ${input.primaryColor},
+        stamp_shape = ${input.stampShape},
 
         logo_url = coalesce(
           ${input.logoUrl ?? null},
@@ -130,8 +98,19 @@ export async function updateBusinessCardConfig(input: {
 
         wallet_updated_at = now()
 
-      where id =
-        ${input.businessId}
+      where id = ${input.businessId}
+    `;
+
+    /*
+     * مهم:
+     * تصميم Business يؤثر على جميع بطاقات العملاء.
+     * لذلك نجعل كل Customer Pass يمتلك updated_at جديدًا.
+     */
+    await tx`
+      update customers
+      set updated_at = now()
+      where business_id = ${input.businessId}
+        and active = true
     `;
   });
 }
